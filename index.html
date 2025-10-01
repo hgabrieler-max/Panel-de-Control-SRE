@@ -289,6 +289,18 @@
                     <div id="assignedUnits-${i.id}" class="flex flex-wrap gap-2 mb-3 border-t pt-2">
                         ${units.map(u => {
                             const isAssigned = i.assignedUnits.includes(u.id);
+                            const isAssignedToOther = !isAssigned && incidents.some(otherI => 
+                                otherI.id !== i.id && otherI.assignedUnits.includes(u.id)
+                            );
+                            
+                            if (isAssignedToOther) {
+                                return `
+                                    <span class="px-2 py-1 rounded text-xs font-semibold bg-gray-300 text-gray-500 opacity-50 cursor-not-allowed">
+                                        ${u.name} (🔒)
+                                    </span>
+                                `;
+                            }
+                            
                             return `
                                 <button 
                                     onclick="toggleAssignUnit(${i.id}, ${u.id})" 
