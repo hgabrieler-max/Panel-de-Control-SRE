@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Despacho - JS Simple (Frecuencias)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .unit-card { transition: background-color 0.2s; }
+        body {
+            background-color: #e6f2e6;
+        }
+        .nature-bg {
+            background: linear-gradient(135deg, #e6f2e6 0%, #cce3d6 100%);
+        }
+        .nature-glass {
+            background: rgba(255,255,255,0.65);
+            box-shadow: 0 4px 24px rgba(34, 49, 34, 0.12);
+            border: 1px solid rgba(34, 49, 34, 0.08);
+            backdrop-filter: blur(3px);
+        }
+    </style>
+</head>
+<body class="nature-bg p-4 min-h-screen">
+
+    <div class="flex items-center mb-4 nature-glass p-4 rounded-lg">
+        <div class="flex items-center gap-4">
+            <h1 class="text-3xl font-extrabold text-green-900">Panel de Control</h1>
+        </div>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        
+        <!-- Unidades: altura fija y scroll -->
+        <div class="nature-glass rounded-lg p-4 h-[90vh] overflow-y-auto">
+            <h2 class="text-xl font-bold mb-3 text-green-800">Units</h2>
+            
+            <div class="flex gap-2 mb-4">
+                <input id="newUnitName" class="border px-2 py-1 rounded w-full" placeholder="New unit name (ej. 11G213)">
+                <select id="newUnitType" class="border rounded px-2 py-1">
+                    <option value="Warden">Warden</option>
+                    <option value="Ranger">Ranger</option>
+                    <option value="AIR">AIR</option>
+                    <option value="TSU">TSU</option>
+                    <option value="ISB">ISB</option> <!-- Nueva opción -->
+                </select>
+                <button onclick="addUnit()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded font-semibold">Add</button>
+            </div>
+            
+            <div id="unitsContainer" class="space-y-3">
+                </div>
+        </div>
+
+        <!-- Incidentes: altura fija y scroll -->
+        <div class="nature-glass rounded-lg p-4 col-span-1 md:col-span-1 h-[90vh] overflow-y-auto">
+            <h2 class="text-xl font-bold mb-3 text-green-800">Incidents</h2>
+            <div class="flex gap-2 mb-4">
+                <input id="newIncidentTitle" class="border px-2 py-1 rounded w-full" placeholder="New incident title (ej. Persecución)">
+                <button onclick="addIncident()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded font-semibold">Add</button>
+            </div>
+            <div id="incidentsContainer" class="space-y-4">
+                </div>
+        </div>
+
+        <!-- Resúmenes: altura fija y scroll -->
+        <div class="nature-glass space-y-4 h-[100vh] overflow-y-auto">
+            <div class="bg-white shadow-xl rounded-lg p-4">
+                <h3 class="text-lg font-bold mb-2 text-gray-700">Frequency Summary</h3>
+                <ul id="frequencySummary" class="text-sm space-y-1">
+                    <li>Law Enforcement: 0 units</li>
+                </ul>
+            </div>
+            <div class="bg-white shadow-xl rounded-lg p-4">
+                <h3 class="text-lg font-bold mb-2 text-gray-700">Unit Status</h3>
+                <ul id="statusSummary" class="text-sm space-y-1">
+                    </ul>
+            </div>
+
+            <!-- Historial: nuevo panel añadido aquí -->
+            <div class="bg-white shadow-xl rounded-lg p-4">
+                <button 
+                    id="toggleHistoryBtn"
+                    onclick="toggleHistory()"
+                    class="bg-gray-700 hover:bg-gray-900 text-white px-3 py-1 rounded font-semibold w-full mb-2"
+                >
+                    Show History
+                </button>
+                <div id="historyPanel" class="hidden mt-2">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-lg font-bold text-gray-700">Incident History</h3>
+                        <button 
+                            onclick="downloadHistory()"
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs ml-2"
+                            style="min-width: 110px;"
+                        >
+                            Descargar
+                        </button>
+                    </div>
+                    <ul id="incidentHistory" class="text-sm space-y-1"></ul>
+                    <h3 class="text-lg font-bold mt-4 mb-2 text-gray-700">Unit History</h3>
+                    <ul id="unitHistory" class="text-sm space-y-1"></ul>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    <script>
+        // --- 1. DEFINICIONES GLOBALES ---
+        const DEFAULT_FREQ = "Law Enforcement";
+        
+        // Colores y Etiquetas
+        const typeColors = {
+            Ranger: "bg-green-100 text-green-800",
+            Warden: "bg-blue-100 text-blue-800",
+            TSU: "bg-yellow-100 text-yellow-800",
+            AIR: "bg-gray-200 text-gray-800",
+            ISB: "bg-blue-200 text-blue-800" // ISB azul claro y menos intenso
+        };
+        const statusColors = {
+            "Código 14": "bg-green-500",    // Disponible
+            "Código 7": "bg-yellow-500",    // En pausa
+            "Código 6": "bg-yellow-400",    // En escena/Asignado (ahora amarillo)
+            "Codigo Rojo": "bg-red-700",    // Código Rojo - rojo intenso
+        };
+        const statusTextColors = {
+            "Código 14": "text-green-900",
+            "Código 7": "text-yellow-900",
+            "Código 6": "text-yellow-900",  // Texto amarillo oscuro
+            "Codigo Rojo": "text-red-900",
+        };
+        
+        // ¡LISTA DE FRECUENCIAS ACTUALIZADA!
+        const frequencies = [
+            "Law Enforcement",
+            "Park Frequency",
+            "TAC-1",
+            "TAC-2",
+            "TAC-3",
+            "TAC-4",
+            "TAC-5",
+            "LTAC-1",
+            "LTAC-2",
+            "LTAC-3",
+            "LTAC-4",
+            "LTAC-5",
+            "WTAC-1",
+            "WTAC-2",
+            "WTAC-3",
+            "WLTAC-1",
+            "WLTAC-2",
+            "WLTAC-3",
+            "MAID-1",
+            "MAID-2",
+            "MAID-3",
+            "MAID-4",
+            "MAID-5",
+            "MAID-6",
+        ];
+
+        const unitTypes = ["Warden", "Ranger", "AIR", "TSU", "ISB"];
+        const statusOptions = ["Código 14", "Código 7", "Código 6", "Codigo Rojo"];
+
+        // --- 2. GESTIÓN DE ESTADO (DATOS) ---
+        let units = [];
+        let incidents = [];
+
+        // Historiales globales
+        let incidentHistory = [];
+        let unitHistory = [];
+
+        // --- 3. FUNCIONES DE RENDERIZADO (DIBUJAR LA PANTALLA) ---
+
+        /**
+         * Dibuja y actualiza la lista completa de unidades y el resumen.
+         */
+        function renderUnits() {
+            const container = document.getElementById('unitsContainer');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            // Agrupar unidades por tipo
+            const unitsByType = unitTypes.reduce((acc, type) => {
+                acc[type] = units.filter(u => u.type === type);
+                return acc;
+            }, {});
+
+            for (const type of unitTypes) {
+                if (unitsByType[type].length > 0) {
+                    // Título de la sección de tipo de unidad
+                    const typeHeader = document.createElement('h3');
+                    typeHeader.className = "font-bold mt-4 mb-1 text-gray-600 border-b pb-1";
+                    typeHeader.textContent = type;
+                    container.appendChild(typeHeader);
+
+                    unitsByType[type].forEach(u => {
+                        // Determinar si la unidad está asignada a CUALQUIER incidente
+                        const isAssigned = incidents.some(i => i.assignedUnits.includes(u.id));
+
+                        const unitElement = document.createElement('div');
+                        unitElement.className = `unit-card p-3 rounded-md shadow-sm flex justify-between items-center text-sm border-l-4 ${typeColors[u.type]} ${isAssigned ? 'border-red-500' : 'border-green-500'} text-gray-900`; // <-- Cambiado a text-gray-900
+                        unitElement.innerHTML = `
+                            <div>
+                                <p class="font-bold text-base text-gray-900">${u.name}</p> <!-- <-- Cambiado a text-gray-900 -->
+                                <div class="flex space-x-2 mt-1">
+                                    <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${typeColors[u.type]} text-gray-900">${u.type}</span> <!-- <-- Cambiado a text-gray-900 -->
+                                    <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">${u.frequency}</span>
+                                </div>
+                            </div>
+                            <div class="flex flex-col space-y-1">
+                                <select 
+                                    onchange="updateUnitFrequency(${u.id}, this.value)" 
+                                    class="border rounded px-1 py-0.5 text-xs text-gray-800"
+                                    ${isAssigned ? 'disabled title="Assigned to incident"' : ''} 
+                                >
+                                    ${frequencies.map(f => `<option value="${f}" ${u.frequency === f ? 'selected' : ''}>${f}</option>`).join('')}
+                                </select>
+                                
+                                <select 
+                                    onchange="updateUnitStatus(${u.id}, this.value)" 
+                                    class="border rounded px-1 py-0.5 text-xs text-gray-800 ${statusColors[u.status]}"
+                                    ${isAssigned ? 'disabled title="Assigned to incident"' : ''}
+                                >
+                                    ${statusOptions.map(s => `<option value="${s}" ${u.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+                                </select>
+                                
+                                <button 
+                                    onclick="deleteUnit(${u.id})" 
+                                    class="bg-gray-500 hover:bg-gray-600 text-white px-2 py-0.5 rounded text-xs"
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        `;
+                        container.appendChild(unitElement);
+                    });
+                }
+            }
+            renderSummaries();
+        }
+
+        /**
+         * Dibuja y actualiza la lista de incidentes.
+         */
+        function renderIncidents() {
+            const container = document.getElementById('incidentsContainer');
+            if (!container) return;
+            container.innerHTML = '';
+
+            incidents.forEach(i => {
+                const incidentElement = document.createElement('div');
+                incidentElement.className = "p-4 rounded-lg border-t-4 border-red-600 bg-gray-50 shadow-lg";
+                incidentElement.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <input 
+                            type="text" 
+                            value="${i.title}" 
+                            onchange="updateIncidentTitle(${i.id}, this.value)" 
+                            class="font-bold text-lg w-full bg-transparent"
+                        >
+                        <button onclick="deleteIncident(${i.id})" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-sm ml-2">X</button>
+                    </div>
+
+                    <div class="mb-3 text-sm flex items-center">
+                        <label class="mr-2 font-medium">Coord. Freq:</label>
+                        <select 
+                            onchange="updateIncidentFrequency(${i.id}, this.value)" 
+                            class="border rounded px-2 py-1 text-xs"
+                        >
+                            ${frequencies.map(f => `<option value="${f}" ${i.coordinationFrequency === f ? 'selected' : ''}>${f}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <div class="mb-2 flex gap-2">
+                        <label class="font-medium text-xs mr-2">Estado:</label>
+                        <select onchange="updateIncidentStatus(${i.id}, this.value)" class="border rounded px-2 py-1 text-xs">
+                            <option value="activo" ${i.active && !i.codigo4 ? 'selected' : ''}>Activo</option>
+                            <option value="codigo4" ${i.codigo4 ? 'selected' : ''}>Código 4</option>
+                        </select>
+                    </div>
+
+                    <p class="font-medium text-gray-600 mb-2">Assigned Units:</p>
+                    <div id="assignedUnits-${i.id}" class="flex flex-wrap gap-2 mb-3 border-t pt-2">
+                        ${units.map(u => {
+                            const isAssigned = i.assignedUnits.includes(u.id);
+                            return `
+                                <button 
+                                    onclick="toggleAssignUnit(${i.id}, ${u.id})" 
+                                    class="px-2 py-1 rounded text-xs font-semibold transition ${isAssigned ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+                                >
+                                    ${u.name} ${isAssigned ? '✅' : ''}
+                                </button>
+                            `;
+                        }).join('')}
+                    </div>
+
+                    <p class="font-medium text-gray-600">Comments (Enter to add):</p>
+                    <input 
+                        id="comment-${i.id}"
+                        type="text" 
+                        placeholder="Add comment..."
+                        onkeydown="if(event.key === 'Enter') { addComment(${i.id}, this.value); this.value = ''; }"
+                        class="border rounded px-2 py-1 w-full text-sm mt-1"
+                    >
+                    <div id="comments-${i.id}" class="text-xs mt-1 space-y-0.5">
+                        ${i.comments.map(c => `<p class="italic text-gray-500">${c}</p>`).join('')}
+                    </div>
+                `;
+                container.appendChild(incidentElement);
+            });
+            renderUnits();
+        }
+
+        // Helpers para el menú plegable de estado de incidente
+        function toggleIncidentStatusMenu(incidentId) {
+            document.querySelectorAll('[id^="incident-status-menu-"]').forEach(el => el.classList.add('hidden'));
+            const menu = document.getElementById(`incident-status-menu-${incidentId}`);
+            if (menu) menu.classList.toggle('hidden');
+        }
+        function hideIncidentStatusMenu(incidentId) {
+            const menu = document.getElementById(`incident-status-menu-${incidentId}`);
+            if (menu) menu.classList.add('hidden');
+        }
+
+        /**
+         * Dibuja los resúmenes de frecuencia y estado.
+         */
+        function renderSummaries() {
+            // Resumen de Frecuencia
+            const freqContainer = document.getElementById('frequencySummary');
+            if (freqContainer) {
+                const freqCount = {};
+                units.forEach(u => {
+                    freqCount[u.frequency] = (freqCount[u.frequency] || 0) + 1;
+                });
+                // Ordenar por el nombre de la frecuencia para que el resumen sea consistente
+                const sortedFrequencies = frequencies.filter(f => freqCount[f] > 0);
+                
+                freqContainer.innerHTML = sortedFrequencies.map(freq => 
+                    `<li>${freq}: <strong class="text-blue-600">${freqCount[freq]}</strong> units</li>`
+                ).join('');
+            }
+
+            // Resumen de Estado
+            const statusContainer = document.getElementById('statusSummary');
+            if (statusContainer) {
+                const statusCount = {};
+                units.forEach(u => {
+                    statusCount[u.status] = (statusCount[u.status] || 0) + 1;
+                });
+                statusContainer.innerHTML = Object.entries(statusCount).map(([status, count]) => 
+                    `<li>${status}: <strong class="text-blue-600">${count}</strong> units</li>`
+                ).join('');
+            }
+        }
+
+
+        // --- 4. FUNCIONES DE LOGICA (MANIPULACIÓN DE DATOS) ---
+
+        // Al crear un incidente, lo agregas al historial con hora de inicio y lista de unidades vacía
+        function addIncident() {
+            const titleInput = document.getElementById('newIncidentTitle');
+            const newTitle = titleInput.value.trim();
+
+            if (!newTitle) {
+                alert("Please enter an incident title.");
+                return;
+            }
+
+            const now = new Date();
+            const newIncident = {
+                id: Date.now(),
+                title: newTitle,
+                assignedUnits: [],
+                coordinationFrequency: DEFAULT_FREQ,
+                comments: [],
+                startTime: now,
+                endTime: null,
+                allUnits: [],
+                active: true,      // Incidente activo por defecto
+                codigo4: false     // No está en código 4 por defecto
+            };
+
+            incidents.push(newIncident);
+
+            incidentHistory.push({
+                ...newIncident,
+                units: [],
+                comments: [],
+                startTime: now,
+                endTime: null,
+                allUnits: [],
+                active: true,
+                codigo4: false
+            });
+
+            titleInput.value = '';
+            renderIncidents();
+        }
+
+        // Al eliminar un incidente, actualiza la hora de fin en el historial y registra todas las unidades que participaron
+        function deleteIncident(incidentId) {
+            if (!confirm("Are you sure you want to delete this incident? Assigned units will be set to Código 14.")) return;
+            const incidentToDelete = incidents.find(i => i.id === incidentId);
+
+            // Liberar unidades asignadas
+            if (incidentToDelete) {
+                units = units.map(u => 
+                    incidentToDelete.assignedUnits.includes(u.id) 
+                        ? { ...u, status: "Código 14", frequency: DEFAULT_FREQ } 
+                        : u
+                );
+            }
+
+            // Actualizar hora de fin en historial y registrar todas las unidades que participaron
+            const hist = incidentHistory.find(h => h.id === incidentId && !h.endTime);
+            if (hist && incidentToDelete) {
+                hist.endTime = new Date();
+                hist.units = [...incidentToDelete.assignedUnits];
+                hist.comments = [...incidentToDelete.comments];
+                hist.allUnits = [...incidentToDelete.allUnits];
+            }
+
+            incidents = incidents.filter(i => i.id !== incidentId);
+            renderIncidents();
+        }
+
+        // Al crear una unidad, la agregas al historial con hora de registro
+        function addUnit() {
+            const nameInput = document.getElementById('newUnitName');
+            const typeInput = document.getElementById('newUnitType');
+            const newName = nameInput.value.trim();
+            const newType = typeInput.value;
+
+            if (!newName) {
+                alert("Please enter a unit name.");
+                return;
+            }
+
+            const now = new Date();
+            const newUnit = {
+                id: Date.now(),
+                name: newName.toUpperCase(),
+                status: "Código 14",
+                type: newType,
+                frequency: DEFAULT_FREQ
+            };
+
+            units.push(newUnit);
+
+            // Guardar en historial
+            unitHistory.push({
+                ...newUnit,
+                startTime: now,
+                endTime: null
+            });
+
+            nameInput.value = '';
+            renderIncidents();
+        }
+
+        // Al eliminar una unidad, actualiza la hora de fin en el historial
+        function deleteUnit(unitId) {
+            if (!confirm("Are you sure you want to delete this unit?")) return;
+            // Quitar la unidad de los incidentes
+            incidents = incidents.map(i => ({
+                ...i,
+                assignedUnits: i.assignedUnits.filter(id => id !== unitId)
+            }));
+            // Quitar la unidad de la lista principal
+            units = units.filter(u => u.id !== unitId);
+
+            // Actualizar hora de fin en historial
+            const hist = unitHistory.find(h => h.id === unitId && !h.endTime);
+            if (hist) {
+                hist.endTime = new Date();
+            }
+
+            renderIncidents();
+        }
+
+        // Al agregar comentario a incidente, también lo agregas al historial
+        function addComment(incidentId, commentText) {
+            if (!commentText.trim()) return;
+            incidents = incidents.map(i => 
+                i.id === incidentId ? { ...i, comments: [...i.comments, commentText] } : i
+            );
+            // Actualizar historial
+            const hist = incidentHistory.find(h => h.id === incidentId && !h.endTime);
+            if (hist) {
+                hist.comments.push(commentText);
+            }
+            renderIncidents();
+        }
+
+        /**
+         * Actualiza la frecuencia de radio de una unidad específica.
+         */
+        function updateUnitFrequency(unitId, newFreq) {
+            units = units.map(u => 
+                u.id === unitId ? { ...u, frequency: newFreq } : u
+            );
+            renderUnits();
+        }
+
+        function updateUnitStatus(unitId, newStatus) {
+            units = units.map(u => 
+                u.id === unitId ? { ...u, status: newStatus } : u
+            );
+            renderUnits();
+        }
+
+        function updateIncidentTitle(incidentId, newTitle) {
+            incidents = incidents.map(i => 
+                i.id === incidentId ? { ...i, title: newTitle } : i
+            );
+        }
+
+        /**
+         * Actualiza la Frecuencia de Coordinación del Incidente y propaga el cambio a las unidades asignadas.
+         */
+        function updateIncidentFrequency(incidentId, newFreq) {
+            incidents = incidents.map(i => {
+                if (i.id === incidentId) {
+                    // Actualizar la frecuencia del incidente
+                    i.coordinationFrequency = newFreq;
+                    // Actualizar la frecuencia de las unidades asignadas
+                    units = units.map(u => 
+                        i.assignedUnits.includes(u.id) 
+                            ? { ...u, frequency: newFreq } // <--- CAMBIO AUTOMÁTICO DE FRECUENCIA
+                            : u
+                    );
+                }
+                return i;
+            });
+            renderIncidents(); 
+        }
+
+        /**
+         * Asigna o desasigna una unidad a un incidente, actualizando su estado y frecuencia.
+         */
+        function toggleAssignUnit(incidentId, unitId) {
+            let unit = units.find(u => u.id === unitId);
+            let incident = incidents.find(i => i.id === incidentId);
+
+            if (!unit || !incident) return;
+
+            const isAssigned = incident.assignedUnits.includes(unitId);
+
+            if (isAssigned) {
+                // Desasignar: quitar de la lista del incidente y devolver la unidad a Código 14/DEFAULT_FREQ
+                incident.assignedUnits = incident.assignedUnits.filter(id => id !== unitId);
+                unit.status = "Código 14";
+                unit.frequency = DEFAULT_FREQ;
+            } else {
+                // Asignar
+                const alreadyAssignedToOther = incidents.some(i => i.id !== incidentId && i.assignedUnits.includes(unitId));
+                if (alreadyAssignedToOther) {
+                    alert(`Unit ${unit.name} is already assigned to another active incident.`);
+                    return;
+                }
+                incident.assignedUnits.push(unitId);
+                unit.status = "Código 6";
+                unit.frequency = incident.coordinationFrequency;
+
+                // Registrar en historial si no está
+                if (!incident.allUnits.includes(unitId)) {
+                    incident.allUnits.push(unitId);
+                    const hist = incidentHistory.find(h => h.id === incidentId && !h.endTime);
+                    if (hist && !hist.allUnits.includes(unitId)) {
+                        hist.allUnits.push(unitId);
+                    }
+                }
+            }
+
+            units = [...units];
+            incidents = [...incidents];
+            renderIncidents();
+        }
+
+        function toggleHistory() {
+            const panel = document.getElementById('historyPanel');
+            const btn = document.getElementById('toggleHistoryBtn');
+            if (panel.classList.contains('hidden')) {
+                panel.classList.remove('hidden');
+                btn.textContent = "Hide History";
+                renderHistory();
+            } else {
+                panel.classList.add('hidden');
+                btn.textContent = "Show History";
+            }
+        }
+
+        function renderHistory() {
+            // Incidentes
+            const incidentList = document.getElementById('incidentHistory');
+            if (incidentList) {
+                incidentList.innerHTML = incidentHistory.map(i => 
+                    `<li>
+                        <span class="font-semibold">${i.title}</span>
+                        <span class="text-xs text-gray-500">(${i.coordinationFrequency})</span>
+                        <div class="text-xs text-gray-400">Inicio: ${i.startTime ? i.startTime.toLocaleString() : ''}</div>
+                        <div class="text-xs text-gray-400">Fin: ${i.endTime ? i.endTime.toLocaleString() : 'En curso'}</div>
+                        <div class="text-xs text-gray-400">Unidades participantes: ${
+                            i.allUnits && i.allUnits.length
+                                ? i.allUnits.map(uid => {
+                                    const u = unitHistory.find(unit => unit.id === uid) || units.find(unit => unit.id === uid);
+                                    return u ? u.name : '';
+                                }).join(', ')
+                                : 'Ninguna'
+                        }</div>
+                        <div class="text-xs text-gray-400">Comentarios: ${i.comments && i.comments.length ? i.comments.join(' | ') : 'Sin comentarios'}</div>
+                    </li>`
+                ).join('');
+            }
+            // Unidades
+            const unitList = document.getElementById('unitHistory');
+            if (unitList) {
+                unitList.innerHTML = unitHistory.map(u => 
+                    `<li>
+                        <span class="font-semibold">${u.name}</span>
+                        <span class="text-xs text-gray-500">(${u.type})</span>
+                        <div class="text-xs text-gray-400">Inicio: ${u.startTime ? u.startTime.toLocaleString() : ''}</div>
+                        <div class="text-xs text-gray-400">Fin: ${u.endTime ? u.endTime.toLocaleString() : 'En servicio'}</div>
+                        <span class="text-xs text-gray-400">Status: ${u.status}, Freq: ${u.frequency}</span>
+                    </li>`
+                ).join('');
+            }
+        }
+
+        function downloadHistory() {
+            let text = "=== INCIDENT HISTORY ===\n\n";
+            incidentHistory.forEach(i => {
+                text += `Incidente: ${i.title}\n`;
+                text += `Frecuencia: ${i.coordinationFrequency}\n`;
+                text += `Inicio: ${i.startTime ? i.startTime.toLocaleString() : ''}\n`;
+                text += `Fin: ${i.endTime ? i.endTime.toLocaleString() : 'En curso'}\n`;
+                text += `Unidades participantes: ${
+                    i.allUnits && i.allUnits.length
+                        ? i.allUnits.map(uid => {
+                            const u = unitHistory.find(unit => unit.id === uid) || units.find(unit => unit.id === uid);
+                            return u ? u.name : '';
+                        }).join(', ')
+                        : 'Ninguna'
+                }\n`;
+                text += `Comentarios: ${i.comments && i.comments.length ? i.comments.join(' | ') : 'Sin comentarios'}\n`;
+                text += "\n";
+            });
+
+            text += "\n=== UNIT HISTORY ===\n\n";
+            unitHistory.forEach(u => {
+                text += `Unidad: ${u.name}\n`;
+                text += `Tipo: ${u.type}\n`;
+                text += `Inicio: ${u.startTime ? u.startTime.toLocaleString() : ''}\n`;
+                text += `Fin: ${u.endTime ? u.endTime.toLocaleString() : 'En servicio'}\n`;
+                text += `Status: ${u.status}, Freq: ${u.frequency}\n`;
+                text += "\n";
+            });
+
+            // Crear y descargar el archivo
+            const blob = new Blob([text], { type: "text/plain" });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "historial_despacho.txt";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // --- 5. INICIALIZACIÓN ---
+        
+        // Cargar algunas unidades e incidentes de prueba al inicio
+        function initializeData() {
+            units = [];
+            incidents = [];
+        }
+
+        // Llamada inicial para dibujar la interfaz al cargar la página
+        initializeData();
+        renderUnits();
+        renderIncidents(); 
+
+        // Cierra el menú solo si el clic es fuera del menú y del botón
+        document.addEventListener('click', function(event) {
+            document.querySelectorAll('[id^="incident-status-menu-"]').forEach(menu => {
+                // Si el menú está abierto
+                if (!menu.classList.contains('hidden')) {
+                    // Si el clic NO es sobre el menú ni sobre el botón que lo abre
+                    const button = menu.previousElementSibling;
+                    if (!menu.contains(event.target) && event.target !== button) {
+                        menu.classList.add('hidden');
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
