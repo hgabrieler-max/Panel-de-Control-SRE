@@ -76,6 +76,12 @@
                     </ul>
             </div>
 
+            <div class="bg-white shadow-xl rounded-lg p-4">
+                <h3 class="text-lg font-bold mb-2 text-gray-700">Units by Type</h3>
+                <ul id="unitTypeSummary" class="text-sm space-y-1">
+                </ul>
+            </div>
+
             <!-- Historial: nuevo panel añadido aquí -->
             <div class="bg-white shadow-xl rounded-lg p-4">
                 <button 
@@ -350,6 +356,22 @@
                 });
                 statusContainer.innerHTML = Object.entries(statusCount).map(([status, count]) => 
                     `<li>${status}: <strong class="text-blue-600">${count}</strong> units</li>`
+                ).join('');
+            }
+
+            // Resumen por Tipo de Unidad
+            const typeContainer = document.getElementById('unitTypeSummary');
+            if (typeContainer) {
+                const typeCount = {};
+                units.forEach(u => {
+                    typeCount[u.type] = (typeCount[u.type] || 0) + 1;
+                });
+                // Mostrar todos los tipos de unidades, incluso los que tienen 0
+                typeContainer.innerHTML = unitTypes.map(type => 
+                    `<li class="flex justify-between">
+                        <span class="inline-block px-2 py-0.5 rounded text-xs font-semibold ${typeColors[type]}">${type}</span>
+                        <strong class="text-blue-600">${typeCount[type] || 0}</strong>
+                    </li>`
                 ).join('');
             }
         }
@@ -698,5 +720,4 @@
         });
     </script>
 </body>
-
 </html>
