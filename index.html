@@ -64,6 +64,24 @@
         .dark [data-type="ISB"] { background-color: #071229 !important; color: #bfdbfe !important; }
         /* Visual for drag-over when reordering categories */
         .drag-over { outline: 3px dashed rgba(59,130,246,0.45); transform: translateY(-2px); }
+        /* Visible resizers between columns */
+        .visible-resizer {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 12px; /* interactive hit area */
+            margin-left: -6px; /* center over boundary */
+            background: transparent; /* invisible */
+            border-left: none;
+            border-right: none;
+            cursor: col-resize;
+            z-index: 9998;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0; /* ensure fully transparent */
+        }
+        .visible-resizer:hover { background: transparent; }
     </style>
 </head>
 <body class="nature-bg p-4 min-h-screen">
@@ -79,7 +97,7 @@
         </div>
     </div>
     
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div id="mainGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4 relative">
         
         <!-- Unidades: altura fija y scroll -->
         <div class="nature-glass rounded-lg p-4 h-[90vh] overflow-y-auto">
@@ -1179,6 +1197,101 @@
                 }
             });
         });
+
+        // Visible resizers: create and enable dragging
+        (function(){
+            const grid = document.getElementById('mainGrid');
+            if (!grid) return;
+            // helper to apply saved cols or default
+            function applySaved() {
+                try {
+                    const raw = localStorage.getItem('gridCols');
+                    if (raw) {
+                        const arr = JSON.parse(raw);
+                        if (Array.isArray(arr) && arr.length === 3) {
+                            grid.style.gridTemplateColumns = arr.join(' ');
+                        }
+                    }
+                } catch(e){}
+            }
+            applySaved();
+            if (window.positionGridResizers) window.positionGridResizers();
+
+            // remove existing resizers
+            grid.querySelectorAll('.visible-resizer').forEach(n=>n.remove());
+
+            for (let i=0;i<2;i++) {
+                const r = document.createElement('div');
+                r.className = 'visible-resizer';
+                r.dataset.index = String(i);
+                grid.appendChild(r);
+                let dragging = false, startX = 0, startCols = [];
+                r.addEventListener('pointerdown', (ev) => {
+                    dragging = true; startX = ev.clientX;
+                    startCols = window.getComputedStyle(grid).gridTemplateColumns.split(' ');
+                    r.setPointerCapture(ev.pointerId);
+                });
+                r.addEventListener('pointermove', (ev) => {
+                    if (!dragging) return;
+                    const rect = grid.getBoundingClientRect();
+                    // compute gap between columns (CSS column-gap)
+                    const cs = window.getComputedStyle(grid);
+                    const gapPx = parseFloat(cs.columnGap || cs.getPropertyValue('column-gap') || 0);
+                    const numCols = startCols.length;
+                    const totalGap = gapPx * (numCols - 1);
+                    const contentWidth = rect.width - totalGap;
+                    const sumFr = startCols.reduce((s,x)=>s+parseFloat(x),0);
+                    const colsPx = startCols.map(c => (parseFloat(c)/sumFr)*contentWidth);
+                    const idx = parseInt(r.dataset.index,10);
+                    const delta = ev.clientX - startX;
+                    let left = colsPx[idx] + delta;
+                    let right = colsPx[idx+1] - delta;
+                    const min = 60;
+                    if (left < min) { right -= (min-left); left = min; }
+                    if (right < min) { left -= (min-right); right = min; }
+                    const s = colsPx.reduce((a,b)=>a+b,0);
+                    const leftPct = Math.round((left/s)*100);
+                    const rightPct = Math.round((right/s)*100);
+                    const other = [];
+                    for (let j=0;j<startCols.length;j++) {
+                        if (j===idx) other.push(leftPct + '%');
+                        else if (j===idx+1) other.push(rightPct + '%');
+                        else other.push(Math.round((colsPx[j]/s)*100) + '%');
+                    }
+                    grid.style.gridTemplateColumns = other.join(' ');
+                    // After adjusting columns, reposition resizers so they sit in the middle of the gaps
+                    if (window.positionGridResizers) window.positionGridResizers();
+                });
+                function stop(ev){ if (!dragging) return; dragging=false; try{ localStorage.setItem('gridCols', JSON.stringify(window.getComputedStyle(grid).gridTemplateColumns.split(' '))); }catch(e){} }
+                r.addEventListener('pointerup', (e)=>{ stop(e); if (window.positionGridResizers) window.positionGridResizers(); });
+                r.addEventListener('pointercancel', (e)=>{ stop(e); if (window.positionGridResizers) window.positionGridResizers(); });
+            }
+
+            function position(){
+                const rect = grid.getBoundingClientRect();
+                const cs = window.getComputedStyle(grid);
+                const gapPx = parseFloat(cs.columnGap || cs.getPropertyValue('column-gap') || 0);
+                const cols = window.getComputedStyle(grid).gridTemplateColumns.split(' ');
+                const sum = cols.reduce((s,x)=>s+parseFloat(x),0);
+                let acc = 0;
+                // contentWidth excludes gaps
+                const totalGap = gapPx * (cols.length - 1);
+                const contentWidth = rect.width - totalGap;
+                grid.querySelectorAll('.visible-resizer').forEach((el,i)=>{
+                    const w = (parseFloat(cols[i])/sum) * contentWidth;
+                    acc += w;
+                    // place resizer centered on the gap after this column
+                    const leftPos = acc + (i * gapPx) + (gapPx / 2);
+                    el.style.left = (leftPos - (gapPx/2)) + 'px';
+                    el.style.width = (gapPx || 12) + 'px';
+                    el.style.height = rect.height + 'px';
+                });
+            }
+            // Expose for other code to call when columns change
+            window.positionGridResizers = position;
+            window.addEventListener('resize', position);
+            setTimeout(position, 100);
+        })();
     </script>
 </body>
 </html>
