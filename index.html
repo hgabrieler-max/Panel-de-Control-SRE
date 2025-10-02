@@ -19,13 +19,59 @@
             border: 1px solid rgba(34, 49, 34, 0.08);
             backdrop-filter: blur(3px);
         }
+        /* Transiciones suaves para cambios de tema */
+        body, .nature-bg, .nature-glass, .unit-card, .bg-white, .bg-gray-50, input, select, textarea, button {
+            transition: background-color 320ms ease, color 320ms ease, border-color 320ms ease, box-shadow 320ms ease;
+        }
+        svg { transition: transform 320ms ease, fill 320ms ease, stroke 320ms ease; }
+        /* Dark mode overrides */
+        .dark body { background-color: #071026; }
+        .dark .nature-bg { background: linear-gradient(135deg,#071726 0%,#0b2230 100%); }
+        .dark .nature-glass {
+            background: rgba(6,10,18,0.7) !important;
+            box-shadow: 0 4px 24px rgba(2,6,23,0.7) !important;
+            border: 1px solid rgba(255,255,255,0.04) !important;
+            color: #e6eef8 !important;
+        }
+        .dark .bg-white, .dark .bg-gray-50, .dark .bg-gray-100 {
+            background-color: #0b1220 !important;
+            color: #dbeafe !important;
+        }
+        /* Inputs, selects y textarea en modo oscuro */
+        .dark input, .dark select, .dark textarea, .dark .border {
+            background-color: #071226 !important;
+            color: #e6eef8 !important;
+            border-color: rgba(255,255,255,0.06) !important;
+        }
+        .dark input::placeholder, .dark textarea::placeholder {
+            color: rgba(230,238,248,0.55) !important;
+        }
+        .dark select option { background-color: #071226; color: #e6eef8; }
+        .dark .text-gray-700, .dark .text-gray-600, .dark .text-gray-500 { color: #cbd5e1 !important; }
+        .dark .text-gray-800, .dark .text-gray-900 { color: #e6eef8 !important; }
+        .dark .bg-gray-300, .dark .bg-gray-200 { background-color: #1f2937 !important; color: #e6eef8 !important; }
+        .dark .bg-gray-300:hover { background-color: #374151 !important; }
+        .dark .unit-card { background: transparent !important; }
+        /* Type-specific darker bars */
+        .dark [data-type="Warden"] { background-color: #071033 !important; color: #bfdbfe !important; }
+        .dark [data-type="Ranger"] { background-color: #052713 !important; color: #bbf7d0 !important; }
+        .dark [data-type="AIR"] { background-color: #0b0f12 !important; color: #cbd5e1 !important; }
+        .dark [data-type="TSU"] { background-color: #2b2a07 !important; color: #fef3c7 !important; }
+        .dark [data-type="ISB"] { background-color: #071229 !important; color: #bfdbfe !important; }
+        /* Visual for drag-over when reordering categories */
+        .drag-over { outline: 3px dashed rgba(59,130,246,0.45); transform: translateY(-2px); }
     </style>
 </head>
 <body class="nature-bg p-4 min-h-screen">
 
-    <div class="flex items-center mb-4 nature-glass p-4 rounded-lg">
+    <div class="flex items-center justify-between mb-4 nature-glass p-4 rounded-lg">
         <div class="flex items-center gap-4">
             <h1 class="text-3xl font-extrabold text-green-900">Panel de Control</h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="darkModeBtn" onclick="toggleDarkMode()" class="bg-gray-200 hover:bg-gray-300 text-sm px-2 py-1 rounded" aria-pressed="false" title="Toggle dark mode">
+                <!-- Icono inicial será insertado por applyDarkMode() -->
+            </button>
         </div>
     </div>
     
@@ -33,10 +79,15 @@
         
         <!-- Unidades: altura fija y scroll -->
         <div class="nature-glass rounded-lg p-4 h-[90vh] overflow-y-auto">
-            <h2 class="text-xl font-bold mb-3 text-green-800">Units</h2>
+            <h2 class="text-xl font-bold mb-3 text-green-800">Unidades</h2>
             
             <div class="flex gap-2 mb-4">
-                <input id="newUnitName" class="border px-2 py-1 rounded w-full" placeholder="New unit name (ej. 11G213)">
+                <input 
+                    id="newUnitName" 
+                    class="border px-2 py-1 rounded w-full" 
+                    placeholder="New unit name (ej. 11G213)"
+                    onkeydown="if(event.key === 'Enter') { addUnit(); }"
+                >
                 <select id="newUnitType" class="border rounded px-2 py-1">
                     <option value="Warden">Warden</option>
                     <option value="Ranger">Ranger</option>
@@ -44,19 +95,30 @@
                     <option value="TSU">TSU</option>
                     <option value="ISB">ISB</option> <!-- Nueva opción -->
                 </select>
-                <button onclick="addUnit()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded font-semibold">Add</button>
+                <button onclick="addUnit()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded font-semibold">Agregar</button>
             </div>
             
             <div id="unitsContainer" class="space-y-3">
                 </div>
+
+            <div class="mt-4">
+                <button onclick="if(confirm('Are you sure you want to delete ALL units?')) deleteAllUnits();" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-2 py-1 rounded text-xs">
+                    Eliminar todas las unidades
+                </button>
+            </div>
         </div>
 
         <!-- Incidentes: altura fija y scroll -->
         <div class="nature-glass rounded-lg p-4 col-span-1 md:col-span-1 h-[90vh] overflow-y-auto">
-            <h2 class="text-xl font-bold mb-3 text-green-800">Incidents</h2>
+            <h2 class="text-xl font-bold mb-3 text-green-800">Incidentes</h2>
             <div class="flex gap-2 mb-4">
-                <input id="newIncidentTitle" class="border px-2 py-1 rounded w-full" placeholder="New incident title (ej. Persecución)">
-                <button onclick="addIncident()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded font-semibold">Add</button>
+                <input 
+                    id="newIncidentTitle" 
+                    class="border px-2 py-1 rounded w-full" 
+                    placeholder="New incident title (ej. Persecución)"
+                    onkeydown="if(event.key === 'Enter') { addIncident(); }"
+                >
+                <button onclick="addIncident()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded font-semibold">Agregar</button>
             </div>
             <div id="incidentsContainer" class="space-y-4">
                 </div>
@@ -65,19 +127,19 @@
         <!-- Resúmenes: altura fija y scroll -->
         <div class="nature-glass space-y-4 h-[100vh] overflow-y-auto">
             <div class="bg-white shadow-xl rounded-lg p-4">
-                <h3 class="text-lg font-bold mb-2 text-gray-700">Frequency Summary</h3>
+                <h3 class="text-lg font-bold mb-2 text-gray-700">Frecuencias activas</h3>
                 <ul id="frequencySummary" class="text-sm space-y-1">
-                    <li>Law Enforcement: 0 units</li>
+                    <li>Law Enforcement: 0 unidades</li>
                 </ul>
             </div>
             <div class="bg-white shadow-xl rounded-lg p-4">
-                <h3 class="text-lg font-bold mb-2 text-gray-700">Unit Status</h3>
+                <h3 class="text-lg font-bold mb-2 text-gray-700">Estado de Unidades</h3>
                 <ul id="statusSummary" class="text-sm space-y-1">
                     </ul>
             </div>
 
             <div class="bg-white shadow-xl rounded-lg p-4">
-                <h3 class="text-lg font-bold mb-2 text-gray-700">Units by Type</h3>
+                <h3 class="text-lg font-bold mb-2 text-gray-700">Conteo de Unidades</h3>
                 <ul id="unitTypeSummary" class="text-sm space-y-1">
                 </ul>
             </div>
@@ -89,11 +151,11 @@
                     onclick="toggleHistory()"
                     class="bg-gray-700 hover:bg-gray-900 text-white px-3 py-1 rounded font-semibold w-full mb-2"
                 >
-                    Show History
+                    Historial
                 </button>
                 <div id="historyPanel" class="hidden mt-2">
                     <div class="flex justify-between items-center mb-2">
-                        <h3 class="text-lg font-bold text-gray-700">Incident History</h3>
+                        <h3 class="text-lg font-bold text-gray-700">Historial de incidentes</h3>
                         <button 
                             onclick="downloadHistory()"
                             class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs ml-2"
@@ -103,7 +165,7 @@
                         </button>
                     </div>
                     <ul id="incidentHistory" class="text-sm space-y-1"></ul>
-                    <h3 class="text-lg font-bold mt-4 mb-2 text-gray-700">Unit History</h3>
+                    <h3 class="text-lg font-bold mt-4 mb-2 text-gray-700">Historial de unidades</h3>
                     <ul id="unitHistory" class="text-sm space-y-1"></ul>
                 </div>
             </div>
@@ -117,23 +179,34 @@
         
         // Colores y Etiquetas
         const typeColors = {
-            Ranger: "bg-green-100 text-green-800",
-            Warden: "bg-blue-100 text-blue-800",
-            TSU: "bg-yellow-100 text-yellow-800",
-            AIR: "bg-gray-200 text-gray-800",
-            ISB: "bg-blue-200 text-blue-800" // ISB azul claro y menos intenso
+            Ranger: "bg-green-700/60 text-white",
+            // Make Warden background less intense by using a semi-transparent blue
+            Warden: "bg-blue-700/60 text-white",
+            TSU: "bg-yellow-700/60 text-white",
+            AIR: "bg-gray-700/60 text-white",
+            ISB: "bg-indigo-700/60 text-white"
+        };
+        // Clases para la barra de cada tipo (fondo y texto)
+        const typeBarClasses = {
+            Ranger: 'bg-green-100/60 text-green-800',
+            Warden: 'bg-blue-100/60 text-blue-800',
+            TSU: 'bg-yellow-100/60 text-yellow-800',
+            AIR: 'bg-gray-100/60 text-gray-800',
+            ISB: 'bg-blue-50/60 text-blue-800'
         };
         const statusColors = {
-            "Código 14": "bg-green-500",    // Disponible
-            "Código 7": "bg-yellow-500",    // En pausa
-            "Código 6": "bg-yellow-400",    // En escena/Asignado (ahora amarillo)
-            "Codigo Rojo": "bg-red-700",    // Código Rojo - rojo intenso
+            // Light / Dark variants so colors remain visible in both themes
+            "Código 14": "bg-green-500 dark:bg-green-700",
+            "Código 7": "bg-yellow-500 dark:bg-yellow-600",
+            "Código 6": "bg-yellow-400 dark:bg-yellow-500",
+            "Codigo Rojo": "bg-red-700 dark:bg-red-500",
         };
         const statusTextColors = {
-            "Código 14": "text-green-900",
-            "Código 7": "text-yellow-900",
-            "Código 6": "text-yellow-900",  // Texto amarillo oscuro
-            "Codigo Rojo": "text-red-900",
+            // Use darker text in light mode, and white in dark mode for contrast
+            "Código 14": "text-green-900 dark:text-white",
+            "Código 7": "text-yellow-900 dark:text-white",
+            "Código 6": "text-yellow-900 dark:text-white",
+            "Codigo Rojo": "text-red-900 dark:text-white",
         };
         
         // ¡LISTA DE FRECUENCIAS ACTUALIZADA!
@@ -164,7 +237,106 @@
             "MAID-6",
         ];
 
-        const unitTypes = ["Warden", "Ranger", "AIR", "TSU", "ISB"];
+    // Devuelve clases Tailwind para una frecuencia (colores en modo claro + variantes dark)
+    function getFrequencyClasses(freq) {
+        // TAC, LTAC, WTAC, WLTAC -> amarillo
+        if (/^(TAC|LTAC|WTAC|WLTAC)/.test(freq)) {
+            return 'bg-yellow-200 text-yellow-800 dark:bg-yellow-600 dark:text-white';
+        }
+        // MAID -> naranja
+        if (/^MAID/.test(freq)) {
+            return 'bg-orange-200 text-orange-800 dark:bg-orange-600 dark:text-white';
+        }
+        // Law Enforcement y Park Frequency -> verde
+        if (freq === 'Law Enforcement' || freq === 'Park Frequency') {
+            return 'bg-green-200 text-green-800 dark:bg-green-700 dark:text-white';
+        }
+        // Default
+        return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-white';
+    }
+
+    const defaultUnitTypes = ["Warden", "Ranger", "AIR", "TSU", "ISB"];
+    // Persistible order of unit types. Load from localStorage or use default order.
+    function loadUnitTypes() {
+        try {
+            const raw = localStorage.getItem('unitTypesOrder');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            }
+        } catch (e) { /* ignore */ }
+        return [...defaultUnitTypes];
+    }
+    function saveUnitTypes(arr) {
+        try { localStorage.setItem('unitTypesOrder', JSON.stringify(arr)); } catch(e){}
+    }
+    let unitTypes = loadUnitTypes();
+    // Mapa de nombres de despliegue para las categorías (no cambian los valores internos)
+    const typeDisplayNames = {
+        Warden: 'S.A Fish And Wildlife',
+        Ranger: 'S.A Parks And Recreation',
+        AIR: 'Aviation Unit',
+        ISB: 'Investigative Service Branch',
+        TSU: 'Traffic Safety Unit'
+    };
+    // Estado de expansión por tipo (true = abierto)
+    let expandedTypes = {};
+
+        // Dark mode state
+        let darkMode = false;
+    // Control de animación del icono (evitar durante la carga inicial)
+    let iconAnimationEnabled = true;
+
+        function applyDarkMode() {
+            if (darkMode) {
+                document.documentElement.classList.add('dark');
+                document.body.classList.add('bg-gray-900', 'text-gray-100');
+                const btn = document.getElementById('darkModeBtn');
+                if (btn) {
+                    btn.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zM4.22 4.22a1 1 0 011.415 0l.707.707a1 1 0 11-1.414 1.414l-.708-.707a1 1 0 010-1.414zM2 10a1 1 0 011-1h1a1 1 0 110 2H3a1 1 0 01-1-1zm8 7a1 1 0 011-1v-1a1 1 0 10-2 0v1a1 1 0 011 1zm6.364-13.364a1 1 0 010 1.414l-.707.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM16 9a1 1 0 011 1v0a1 1 0 11-2 0 1 1 0 011-1zM4.22 15.778a1 1 0 010-1.414l.707-.707a1 1 0 111.414 1.414l-.707.707a1 1 0 01-1.414 0zM14.95 14.95a1 1 0 10-1.414 1.414l.707.707a1 1 0 001.414-1.414l-.707-.707z" />
+                        </svg>
+                    `;
+                    btn.setAttribute('aria-pressed', 'true');
+                    // Animación rápida de rotación si está permitido
+                    if (iconAnimationEnabled) {
+                        const svg = btn.querySelector('svg');
+                        if (svg) {
+                            svg.style.transition = 'transform 300ms ease';
+                            svg.style.transform = 'rotate(360deg)';
+                            setTimeout(() => { svg.style.transform = ''; }, 350);
+                        }
+                    }
+                }
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.body.classList.remove('bg-gray-900', 'text-gray-100');
+                const btn = document.getElementById('darkModeBtn');
+                if (btn) {
+                    btn.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M17.293 13.293A8 8 0 116.707 2.707a7 7 0 0010.586 10.586z" />
+                        </svg>
+                    `;
+                    btn.setAttribute('aria-pressed', 'false');
+                    if (iconAnimationEnabled) {
+                        const svg = btn.querySelector('svg');
+                        if (svg) {
+                            svg.style.transition = 'transform 300ms ease';
+                            svg.style.transform = 'rotate(360deg)';
+                            setTimeout(() => { svg.style.transform = ''; }, 350);
+                        }
+                    }
+                }
+            }
+        }
+
+        function toggleDarkMode() {
+            darkMode = !darkMode;
+            localStorage.setItem('darkMode', darkMode ? '1' : '0');
+            applyDarkMode();
+        }
         const statusOptions = ["Código 14", "Código 7", "Código 6", "Codigo Rojo"];
 
         // --- 2. GESTIÓN DE ESTADO (DATOS) ---
@@ -184,65 +356,212 @@
             const container = document.getElementById('unitsContainer');
             if (!container) return;
             container.innerHTML = '';
-            
+
             // Agrupar unidades por tipo
             const unitsByType = unitTypes.reduce((acc, type) => {
                 acc[type] = units.filter(u => u.type === type);
                 return acc;
             }, {});
 
-            for (const type of unitTypes) {
-                if (unitsByType[type].length > 0) {
-                    // Título de la sección de tipo de unidad
-                    const typeHeader = document.createElement('h3');
-                    typeHeader.className = "font-bold mt-4 mb-1 text-gray-600 border-b pb-1";
-                    typeHeader.textContent = type;
-                    container.appendChild(typeHeader);
-
-                    unitsByType[type].forEach(u => {
-                        // Determinar si la unidad está asignada a CUALQUIER incidente
-                        const isAssigned = incidents.some(i => i.assignedUnits.includes(u.id));
-
-                        const unitElement = document.createElement('div');
-                        unitElement.className = `unit-card p-3 rounded-md shadow-sm flex justify-between items-center text-sm border-l-4 ${typeColors[u.type]} ${isAssigned ? 'border-red-500' : 'border-green-500'} text-gray-900`; // <-- Cambiado a text-gray-900
-                        unitElement.innerHTML = `
-                            <div>
-                                <p class="font-bold text-base text-gray-900">${u.name}</p> <!-- <-- Cambiado a text-gray-900 -->
-                                <div class="flex space-x-2 mt-1">
-                                    <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${typeColors[u.type]} text-gray-900">${u.type}</span> <!-- <-- Cambiado a text-gray-900 -->
-                                    <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">${u.frequency}</span>
-                                </div>
-                            </div>
-                            <div class="flex flex-col space-y-1">
-                                <select 
-                                    onchange="updateUnitFrequency(${u.id}, this.value)" 
-                                    class="border rounded px-1 py-0.5 text-xs text-gray-800"
-                                    ${isAssigned ? 'disabled title="Assigned to incident"' : ''} 
-                                >
-                                    ${frequencies.map(f => `<option value="${f}" ${u.frequency === f ? 'selected' : ''}>${f}</option>`).join('')}
-                                </select>
-                                
-                                <select 
-                                    onchange="updateUnitStatus(${u.id}, this.value)" 
-                                    class="border rounded px-1 py-0.5 text-xs text-gray-800 ${statusColors[u.status]}"
-                                    ${isAssigned ? 'disabled title="Assigned to incident"' : ''}
-                                >
-                                    ${statusOptions.map(s => `<option value="${s}" ${u.status === s ? 'selected' : ''}>${s}</option>`).join('')}
-                                </select>
-                                
-                                <button 
-                                    onclick="deleteUnit(${u.id})" 
-                                    class="bg-gray-500 hover:bg-gray-600 text-white px-2 py-0.5 rounded text-xs"
-                                >
-                                    Delete
-                                </button>
-                            </div>
-                        `;
-                        container.appendChild(unitElement);
-                    });
-                }
+            // Orden natural (alfanumérico) dentro de cada categoría
+            for (const t of unitTypes) {
+                unitsByType[t].sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'}));
             }
+
+            for (const type of unitTypes) {
+                const section = document.createElement('div');
+                section.className = 'mt-2';
+                section.setAttribute('draggable', 'true');
+                section.dataset.type = type;
+
+                // Header plegable
+                const header = document.createElement('div');
+                header.className = 'flex items-center justify-between cursor-pointer select-none p-2 rounded';
+                const barClasses = typeBarClasses[type] || 'bg-gray-100 text-gray-700';
+                // In light mode we want a slightly transparent bar for visual softness
+                const opacityClass = darkMode ? '' : ' bg-opacity-60';
+                header.innerHTML = `
+                    <div class="w-full">
+                        <div 
+                            data-type="${type}" 
+                            class="flex items-center justify-between ${barClasses}${opacityClass} rounded px-3 py-1 cursor-pointer transform transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-400" 
+                            onclick="toggleType('${type}')" 
+                            role="button" 
+                            tabindex="0" 
+                            onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleType('${type}'); }"
+                        >
+                            <div class="text-left flex items-center gap-2">
+                                <span class="font-bold">${typeDisplayNames[type] || type}</span>
+                                <small class="text-sm opacity-70">(${unitsByType[type].length})</small>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button onclick="event.stopPropagation(); confirmDeleteUnitsByType('${type}')" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-2 py-0.5 rounded text-xs">Eliminar</button>
+                                <span id="chevron-${type}" class="opacity-80"></span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                // Drag & drop handlers to reorder categories
+                section.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', type);
+                    e.dataTransfer.effectAllowed = 'move';
+                    section.classList.add('opacity-70');
+                });
+                section.addEventListener('dragend', (e) => {
+                    section.classList.remove('opacity-70');
+                    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+                });
+                section.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    section.classList.add('drag-over');
+                    e.dataTransfer.dropEffect = 'move';
+                });
+                section.addEventListener('dragleave', (e) => {
+                    section.classList.remove('drag-over');
+                });
+                section.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    section.classList.remove('drag-over');
+                    const fromType = e.dataTransfer.getData('text/plain');
+                    const toType = type;
+                    if (fromType && toType && fromType !== toType) {
+                        reorderTypes(fromType, toType);
+                        renderUnits();
+                    }
+                });
+
+                section.appendChild(header);
+
+                // Contenedor de unidades (colapsable, sin animación al renderizar)
+                const listDiv = document.createElement('div');
+                listDiv.id = `unitsList-${type}`;
+                listDiv.className = 'mt-2 space-y-3 overflow-hidden';
+                // Disable transition during render to avoid animation on add/remove
+                listDiv.style.transition = 'none';
+
+                // Determinar estado inicial (usar expandedTypes si está definido)
+                if (expandedTypes[type] === undefined) {
+                    // Por defecto: abierto si hay unidades, cerrado si no
+                    expandedTypes[type] = unitsByType[type].length > 0;
+                }
+
+                // Añadir tarjetas de unidad dentro del listDiv
+                unitsByType[type].forEach(u => {
+                    const isAssigned = incidents.some(i => i.assignedUnits.includes(u.id));
+
+                    const unitElement = document.createElement('div');
+                    unitElement.className = `unit-card p-3 rounded-md shadow-sm flex justify-between items-center text-sm border-l-4 ${typeColors[u.type]} ${isAssigned ? 'border-red-500' : 'border-green-500'}`;
+                    unitElement.innerHTML = `
+                        <div>
+                            <p class="font-bold text-base">${u.name}</p>
+                            <div class="flex space-x-2 mt-1">
+                                <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${typeColors[u.type]}">${u.type}</span>
+                                <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getFrequencyClasses(u.frequency)}">${u.frequency}</span>
+                            </div>
+                        </div>
+                        <div class="flex flex-col space-y-1">
+                            <select 
+                                onchange="updateUnitFrequency(${u.id}, this.value)" 
+                                class="border rounded px-1 py-0.5 text-xs text-gray-800"
+                                ${isAssigned ? 'disabled title="Assigned to incident"' : ''} 
+                            >
+                                ${frequencies.map(f => `<option value="${f}" ${u.frequency === f ? 'selected' : ''}>${f}</option>`).join('')}
+                            </select>
+                            
+                            <select 
+                                onchange="updateUnitStatus(${u.id}, this.value)" 
+                                class="border rounded px-1 py-0.5 text-xs text-gray-800 dark:text-white ${statusColors[u.status]} ${statusTextColors[u.status] || ''}"
+                                ${isAssigned ? 'disabled title="Assigned to incident"' : ''}
+                            >
+                                ${statusOptions.map(s => `<option value="${s}" ${u.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+                            </select>
+                            
+                            <button 
+                                onclick="deleteUnit(${u.id})" 
+                                class="bg-gray-500 hover:bg-gray-600 text-white px-2 py-0.5 rounded text-xs"
+                            >
+                                Eliminar
+                            </button>
+                        </div>
+                    `;
+
+                    listDiv.appendChild(unitElement);
+                });
+
+                // After building list, set open/closed state without animation based on expandedTypes
+                if (expandedTypes[type]) {
+                    // open: remove maxHeight restriction so it grows naturally
+                    listDiv.style.maxHeight = '';
+                    listDiv.dataset.open = 'true';
+                    const chevron = document.getElementById(`chevron-${type}`);
+                    if (chevron) chevron.textContent = '▲';
+                } else {
+                    // closed
+                    listDiv.style.maxHeight = '0px';
+                    listDiv.dataset.open = 'false';
+                    const chevron = document.getElementById(`chevron-${type}`);
+                    if (chevron) chevron.textContent = '▼';
+                }
+
+                section.appendChild(listDiv);
+                container.appendChild(section);
+            }
+
             renderSummaries();
+        }
+
+        // Reordena unitTypes intercambiando la posición de fromType y toType (swap) y persiste
+        function reorderTypes(fromType, toType) {
+            const fromIdx = unitTypes.indexOf(fromType);
+            const toIdx = unitTypes.indexOf(toType);
+            if (fromIdx === -1 || toIdx === -1) return;
+            // Swap
+            const tmp = unitTypes[fromIdx];
+            unitTypes[fromIdx] = unitTypes[toIdx];
+            unitTypes[toIdx] = tmp;
+            saveUnitTypes(unitTypes);
+        }
+
+        // Alterna la visibilidad de la lista de un tipo de unidad con animación
+        // La animación se aplica dinámicamente sólo cuando el usuario pulsa la flecha.
+        function toggleType(type) {
+            const list = document.getElementById(`unitsList-${type}`);
+            const chevron = document.getElementById(`chevron-${type}`);
+            if (!list) return;
+            const isOpen = list.dataset.open === 'true';
+
+            // Activar transición justo antes de cambiar para que no ocurra durante render
+            list.style.transition = 'max-height 300ms ease';
+
+            if (isOpen) {
+                // Colapsar: establecer maxHeight al valor actual y forzar reflow antes de 0
+                const current = list.scrollHeight;
+                list.style.maxHeight = current + 'px';
+                // Forzar reflow
+                void list.offsetHeight;
+                list.style.maxHeight = '0px';
+                list.dataset.open = 'false';
+                expandedTypes[type] = false;
+                if (chevron) chevron.textContent = '▼';
+            } else {
+                // Expandir: establecer maxHeight al scrollHeight actual
+                const full = list.scrollHeight;
+                list.style.maxHeight = full + 'px';
+                list.dataset.open = 'true';
+                expandedTypes[type] = true;
+                if (chevron) chevron.textContent = '▲';
+            }
+
+            // Después de la transición, limpiar el estilo inline para permitir crecimiento natural
+            list.addEventListener('transitionend', function handler() {
+                // Si está abierto, quitar max-height para permitir que crezca con contenido dinámico
+                if (list.dataset.open === 'true') {
+                    list.style.maxHeight = '';
+                }
+                // Desactivar la transición hasta la próxima interacción
+                list.style.transition = 'none';
+                list.removeEventListener('transitionend', handler);
+            });
         }
 
         /**
@@ -287,29 +606,35 @@
 
                     <p class="font-medium text-gray-600 mb-2">Assigned Units:</p>
                     <div id="assignedUnits-${i.id}" class="flex flex-wrap gap-2 mb-3 border-t pt-2">
-                        ${units.map(u => {
-                            const isAssigned = i.assignedUnits.includes(u.id);
-                            const isAssignedToOther = !isAssigned && incidents.some(otherI => 
-                                otherI.id !== i.id && otherI.assignedUnits.includes(u.id)
-                            );
-                            
-                            if (isAssignedToOther) {
-                                return `
-                                    <span class="px-2 py-1 rounded text-xs font-semibold bg-gray-300 text-gray-500 opacity-50 cursor-not-allowed">
-                                        ${u.name} (🔒)
-                                    </span>
-                                `;
-                            }
-                            
-                            return `
-                                <button 
-                                    onclick="toggleAssignUnit(${i.id}, ${u.id})" 
-                                    class="px-2 py-1 rounded text-xs font-semibold transition ${isAssigned ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
-                                >
-                                    ${u.name} ${isAssigned ? '✅' : ''}
-                                </button>
-                            `;
-                        }).join('')}
+                        ${unitTypes.map(type =>
+                            units
+                                .filter(u => u.type === type)
+                                .sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'}))
+                                .map(u => {
+                                    const isAssigned = i.assignedUnits.includes(u.id);
+                                    const isAssignedToOther = !isAssigned && incidents.some(otherI =>
+                                        otherI.id !== i.id && otherI.assignedUnits.includes(u.id)
+                                    );
+
+                                    if (isAssignedToOther) {
+                                        return `
+                                            <span class="px-2 py-1 rounded text-xs font-semibold bg-gray-300 text-gray-500 opacity-50 cursor-not-allowed">
+                                                ${u.name} (🔒)
+                                            </span>
+                                        `;
+                                    }
+
+                                    return `
+                                        <button 
+                                            onclick="toggleAssignUnit(${i.id}, ${u.id})" 
+                                            class="px-2 py-1 rounded text-xs font-semibold transition ${isAssigned ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+                                        >
+                                            ${u.name} ${isAssigned ? '✅' : ''}
+                                        </button>
+                                    `;
+                                })
+                                .join('')
+                        ).join('')}
                     </div>
 
                     <p class="font-medium text-gray-600">Comments (Enter to add):</p>
@@ -320,8 +645,8 @@
                         onkeydown="if(event.key === 'Enter') { addComment(${i.id}, this.value); this.value = ''; }"
                         class="border rounded px-2 py-1 w-full text-sm mt-1"
                     >
-                    <div id="comments-${i.id}" class="text-xs mt-1 space-y-0.5">
-                        ${i.comments.map(c => `<p class="italic text-gray-500">${c}</p>`).join('')}
+                    <div id="comments-${i.id}" class="text-sm mt-1 space-y-0.5">
+                        ${i.comments.map(c => `<p class="italic text-gray-400 text-sm">${c}</p>`).join('')}
                     </div>
                 `;
                 container.appendChild(incidentElement);
@@ -340,6 +665,18 @@
             if (menu) menu.classList.add('hidden');
         }
 
+        // Formatea una fecha a UTC con formato militar HH:MM:SS DD/MM/YYYY UTC
+        function formatUTC(date) {
+            const d = new Date(date);
+            const yyyy = d.getUTCFullYear();
+            const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+            const dd = String(d.getUTCDate()).padStart(2, '0');
+            const hh = String(d.getUTCHours()).padStart(2, '0');
+            const min = String(d.getUTCMinutes()).padStart(2, '0');
+            const ss = String(d.getUTCSeconds()).padStart(2, '0');
+            return `${hh}:${min}:${ss} ${dd}/${mm}/${yyyy} UTC`;
+        }
+
         /**
          * Dibuja los resúmenes de frecuencia y estado.
          */
@@ -355,7 +692,7 @@
                 const sortedFrequencies = frequencies.filter(f => freqCount[f] > 0);
                 
                 freqContainer.innerHTML = sortedFrequencies.map(freq => 
-                    `<li>${freq}: <strong class="text-blue-600">${freqCount[freq]}</strong> units</li>`
+                    `<li>${freq}: <strong class="text-blue-600">${freqCount[freq]}</strong> unidades</li>`
                 ).join('');
             }
 
@@ -367,7 +704,7 @@
                     statusCount[u.status] = (statusCount[u.status] || 0) + 1;
                 });
                 statusContainer.innerHTML = Object.entries(statusCount).map(([status, count]) => 
-                    `<li>${status}: <strong class="text-blue-600">${count}</strong> units</li>`
+                    `<li>${status}: <strong class="text-blue-600">${count}</strong> unidades</li>`
                 ).join('');
             }
 
@@ -434,7 +771,7 @@
 
         // Al eliminar un incidente, actualiza la hora de fin en el historial y registra todas las unidades que participaron
         function deleteIncident(incidentId) {
-            if (!confirm("Are you sure you want to delete this incident? Assigned units will be set to Código 14.")) return;
+            if (!confirm("¿Estás seguro de que deseas eliminar este incidente? Las unidades asignadas pasarán a Código 14.")) return;
             const incidentToDelete = incidents.find(i => i.id === incidentId);
 
             // Liberar unidades asignadas
@@ -495,7 +832,7 @@
 
         // Al eliminar una unidad, actualiza la hora de fin en el historial
         function deleteUnit(unitId) {
-            if (!confirm("Are you sure you want to delete this unit?")) return;
+            if (!confirm("¿Estás seguro de que deseas eliminar esta unidad?")) return;
             // Quitar la unidad de los incidentes
             incidents = incidents.map(i => ({
                 ...i,
@@ -511,6 +848,51 @@
             }
 
             renderIncidents();
+        }
+
+        // Elimina todas las unidades
+        function deleteAllUnits() {
+            if (!confirm("¿Estás seguro de que deseas eliminar TODAS las unidades? Esto no se puede deshacer.")) return;
+            // Quitar de incidentes
+            incidents = incidents.map(i => ({
+                ...i,
+                assignedUnits: i.assignedUnits.filter(id => !units.find(u => u.id === id))
+            }));
+
+            // Actualizar historial de unidades
+            unitHistory.forEach(h => {
+                if (!h.endTime) h.endTime = new Date();
+            });
+
+            units = [];
+            renderIncidents();
+        }
+
+        // Elimina unidades por tipo
+        function deleteUnitsByType(type) {
+            if (!confirm(`¿Estás seguro de que deseas eliminar todas las unidades de tipo ${type}?`)) return;
+
+            const toDeleteIds = units.filter(u => u.type === type).map(u => u.id);
+
+            // Quitar de incidentes
+            incidents = incidents.map(i => ({
+                ...i,
+                assignedUnits: i.assignedUnits.filter(id => !toDeleteIds.includes(id))
+            }));
+
+            // Actualizar historial
+            unitHistory.forEach(h => {
+                if (toDeleteIds.includes(h.id) && !h.endTime) h.endTime = new Date();
+            });
+
+            units = units.filter(u => u.type !== type);
+            renderIncidents();
+        }
+
+        // Confirmación antes de borrar por tipo (botón discreto en header)
+        function confirmDeleteUnitsByType(type) {
+            if (!confirm(`Eliminar todas las unidades de tipo ${type}? Esta acción no se puede deshacer.`)) return;
+            deleteUnitsByType(type);
         }
 
         // Al agregar comentario a incidente, también lo agregas al historial
@@ -617,11 +999,11 @@
             const btn = document.getElementById('toggleHistoryBtn');
             if (panel.classList.contains('hidden')) {
                 panel.classList.remove('hidden');
-                btn.textContent = "Hide History";
+                btn.textContent = "Ocultar Historial";
                 renderHistory();
             } else {
                 panel.classList.add('hidden');
-                btn.textContent = "Show History";
+                btn.textContent = "Historial";
             }
         }
 
@@ -633,8 +1015,8 @@
                     `<li>
                         <span class="font-semibold">${i.title}</span>
                         <span class="text-xs text-gray-500">(${i.coordinationFrequency})</span>
-                        <div class="text-xs text-gray-400">Inicio: ${i.startTime ? i.startTime.toLocaleString() : ''}</div>
-                        <div class="text-xs text-gray-400">Fin: ${i.endTime ? i.endTime.toLocaleString() : 'En curso'}</div>
+                        <div class="text-xs text-gray-400">Inicio: ${i.startTime ? formatUTC(i.startTime) : ''}</div>
+                        <div class="text-xs text-gray-400">Fin: ${i.endTime ? formatUTC(i.endTime) : 'En curso'}</div>
                         <div class="text-xs text-gray-400">Unidades participantes: ${
                             i.allUnits && i.allUnits.length
                                 ? i.allUnits.map(uid => {
@@ -643,7 +1025,7 @@
                                 }).join(', ')
                                 : 'Ninguna'
                         }</div>
-                        <div class="text-xs text-gray-400">Comentarios: ${i.comments && i.comments.length ? i.comments.join(' | ') : 'Sin comentarios'}</div>
+                        <div class="text-sm text-gray-400">Comentarios: ${i.comments && i.comments.length ? i.comments.join(' | ') : 'Sin comentarios'}</div>
                     </li>`
                 ).join('');
             }
@@ -654,21 +1036,33 @@
                     `<li>
                         <span class="font-semibold">${u.name}</span>
                         <span class="text-xs text-gray-500">(${u.type})</span>
-                        <div class="text-xs text-gray-400">Inicio: ${u.startTime ? u.startTime.toLocaleString() : ''}</div>
-                        <div class="text-xs text-gray-400">Fin: ${u.endTime ? u.endTime.toLocaleString() : 'En servicio'}</div>
-                        <span class="text-xs text-gray-400">Status: ${u.status}, Freq: ${u.frequency}</span>
+                        <div class="text-xs text-gray-400">Inicio: ${u.startTime ? formatUTC(u.startTime) : ''}</div>
+                        <div class="text-xs text-gray-400">Fin: ${u.endTime ? formatUTC(u.endTime) : 'En servicio'}</div>
+                        <span class="text-xs text-gray-400">Estado: ${u.status}, Frecuencia: ${u.frequency}</span>
                     </li>`
                 ).join('');
             }
         }
 
         function downloadHistory() {
-            let text = "=== INCIDENT HISTORY ===\n\n";
+            // Helper para formato UTC militar
+            function formatUTC(date) {
+                const d = new Date(date);
+                const yyyy = d.getUTCFullYear();
+                const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+                const dd = String(d.getUTCDate()).padStart(2, '0');
+                const hh = String(d.getUTCHours()).padStart(2, '0');
+                const min = String(d.getUTCMinutes()).padStart(2, '0');
+                const ss = String(d.getUTCSeconds()).padStart(2, '0');
+                return `${hh}:${min}:${ss} ${dd}/${mm}/${yyyy} UTC`;
+            }
+
+            let text = "=== HISTORIAL DE INCIDENTES ===\n\n";
             incidentHistory.forEach(i => {
                 text += `Incidente: ${i.title}\n`;
                 text += `Frecuencia: ${i.coordinationFrequency}\n`;
-                text += `Inicio: ${i.startTime ? i.startTime.toLocaleString() : ''}\n`;
-                text += `Fin: ${i.endTime ? i.endTime.toLocaleString() : 'En curso'}\n`;
+                text += `Inicio: ${i.startTime ? formatUTC(i.startTime) : ''}\n`;
+                text += `Fin: ${i.endTime ? formatUTC(i.endTime) : 'En curso'}\n`;
                 text += `Unidades participantes: ${
                     i.allUnits && i.allUnits.length
                         ? i.allUnits.map(uid => {
@@ -681,13 +1075,13 @@
                 text += "\n";
             });
 
-            text += "\n=== UNIT HISTORY ===\n\n";
+            text += "\n=== HISTORIAL DE UNIDADES ===\n\n";
             unitHistory.forEach(u => {
                 text += `Unidad: ${u.name}\n`;
                 text += `Tipo: ${u.type}\n`;
-                text += `Inicio: ${u.startTime ? u.startTime.toLocaleString() : ''}\n`;
-                text += `Fin: ${u.endTime ? u.endTime.toLocaleString() : 'En servicio'}\n`;
-                text += `Status: ${u.status}, Freq: ${u.frequency}\n`;
+                text += `Inicio: ${u.startTime ? formatUTC(u.startTime) : ''}\n`;
+                text += `Fin: ${u.endTime ? formatUTC(u.endTime) : 'En servicio'}\n`;
+                text += `Estado: ${u.status}, Frecuencia: ${u.frequency}\n`;
                 text += "\n";
             });
 
@@ -716,6 +1110,15 @@
         initializeData();
         renderUnits();
         renderIncidents(); 
+
+        // Inicializar modo oscuro desde localStorage
+        (function() {
+            const dm = localStorage.getItem('darkMode');
+            if (dm === '1') {
+                darkMode = true;
+            }
+            applyDarkMode();
+        })();
 
         // Cierra el menú solo si el clic es fuera del menú y del botón
         document.addEventListener('click', function(event) {
