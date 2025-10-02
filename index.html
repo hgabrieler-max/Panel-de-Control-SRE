@@ -52,6 +52,10 @@
         .dark .bg-gray-300, .dark .bg-gray-200 { background-color: #1f2937 !important; color: #e6eef8 !important; }
         .dark .bg-gray-300:hover { background-color: #374151 !important; }
         .dark .unit-card { background: transparent !important; }
+          /* Ensure freq/status indicators are hidden in light mode and shown only in dark mode
+              This is explicit CSS so it works even if Tailwind's generated dark: variants are missing */
+          .freq-indicator, .status-indicator { display: none !important; }
+          .dark .freq-indicator, .dark .status-indicator { display: inline-block !important; }
         /* Type-specific darker bars */
         .dark [data-type="Warden"] { background-color: #071033 !important; color: #bfdbfe !important; }
         .dark [data-type="Ranger"] { background-color: #052713 !important; color: #bbf7d0 !important; }
@@ -271,13 +275,20 @@
         try { localStorage.setItem('unitTypesOrder', JSON.stringify(arr)); } catch(e){}
     }
     let unitTypes = loadUnitTypes();
-    // Mapa de nombres de despliegue para las categorías (no cambian los valores internos)
-    const typeDisplayNames = {
+    // Mapa de nombres de despliegue para las categorías (nombres completos) y abreviaturas para las etiquetas
+    const typeDisplayFull = {
         Warden: 'S.A Fish And Wildlife',
         Ranger: 'S.A Parks And Recreation',
         AIR: 'Aviation Unit',
         ISB: 'Investigative Service Branch',
         TSU: 'Traffic Safety Unit'
+    };
+    const typeAbbrev = {
+        Warden: 'SAFW',
+        Ranger: 'SAPR',
+        AIR: 'AIR',
+        ISB: 'ISB',
+        TSU: 'TSU'
     };
     // Estado de expansión por tipo (true = abierto)
     let expandedTypes = {};
@@ -382,7 +393,7 @@
                 const opacityClass = darkMode ? '' : ' bg-opacity-60';
                 header.innerHTML = `
                     <div class="w-full">
-                        <div 
+                            <div 
                             data-type="${type}" 
                             class="flex items-center justify-between ${barClasses}${opacityClass} rounded px-3 py-1 cursor-pointer transform transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-400" 
                             onclick="toggleType('${type}')" 
@@ -391,7 +402,7 @@
                             onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleType('${type}'); }"
                         >
                             <div class="text-left flex items-center gap-2">
-                                <span class="font-bold">${typeDisplayNames[type] || type}</span>
+                                <span class="font-bold">${typeDisplayFull[type] || type}</span>
                             </div>
                             <div class="flex items-center gap-2">
                                 <button onclick="event.stopPropagation(); confirmDeleteUnitsByType('${type}')" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-2 py-0.5 rounded text-xs">Eliminar</button>
@@ -455,33 +466,37 @@
                     unitElement.innerHTML = `
                         <div>
                             <p class="font-bold text-base">${u.name}</p>
-                            <div class="grid grid-cols-[auto_auto] gap-x-2 mt-1 items-center">
-                                <span class="inline-block px-3 py-1 rounded-full text-sm font-semibold ${typeColors[u.type]}">${u.type}</span>
-                                <span class="inline-block px-3 py-1 rounded-full text-sm font-medium ${getFrequencyClasses(u.frequency)}">${u.frequency}</span>
-                                <!-- Status/code badge aligned under the frequency (second column) -->
-                                <span class="col-start-2 mt-1 inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[u.status] || 'bg-gray-200'} ${statusTextColors[u.status] || 'text-gray-800'}">${u.status}</span>
-                            </div>
+                            <span class="block mt-1 inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-opacity-60 ${typeColors[u.type] || 'bg-gray-200 text-gray-800'}" title="${typeDisplayFull[u.type] || u.type}">${typeAbbrev[u.type] || u.type}</span>
                         </div>
                         <div class="flex flex-col space-y-1">
-                            <select 
-                                onchange="updateUnitFrequency(${u.id}, this.value)" 
-                                class="border rounded px-2 py-1 text-sm ${getFrequencyClasses(u.frequency)}"
-                                ${isAssigned ? 'disabled title="Assigned to incident"' : ''} 
-                            >
-                                ${frequencies.map(f => `<option value="${f}" ${u.frequency === f ? 'selected' : ''}>${f}</option>`).join('')}
-                            </select>
+                            <div class="flex items-center gap-2">
+                                <!-- Small color indicator for frequency: hidden in light mode, visible (smaller) in dark mode -->
+                                <span id="freqIndicator-${u.id}" class="freq-indicator w-6 h-4 rounded-md ${getFrequencyClasses(u.frequency)} dark:ring-1 dark:ring-white/10 shadow-sm" title="${u.frequency}" aria-hidden="true"></span>
+                                <select 
+                                    onchange="updateUnitFrequency(${u.id}, this.value)" 
+                                    class="border rounded px-1 py-0.5 text-xs ${getFrequencyClasses(u.frequency)}"
+                                    ${isAssigned ? 'disabled title="Assigned to incident"' : ''} 
+                                >
+                                    ${frequencies.map(f => `<option value="${f}" ${u.frequency === f ? 'selected' : ''}>${f}</option>`).join('')}
+                                </select>
+                            </div>
                             
-                            <select 
-                                onchange="updateUnitStatus(${u.id}, this.value)" 
-                                class="border rounded px-2 py-1 text-sm text-gray-800 dark:text-white ${statusColors[u.status]} ${statusTextColors[u.status] || ''}"
-                                ${isAssigned ? 'disabled title="Assigned to incident"' : ''}
-                            >
-                                ${statusOptions.map(s => `<option value="${s}" ${u.status === s ? 'selected' : ''}>${s}</option>`).join('')}
-                            </select>
+                            <div class="flex items-center gap-2">
+                                <!-- Small color indicator for status: hidden in light mode, visible (smaller) in dark mode -->
+                                <span id="statusIndicator-${u.id}" class="status-indicator w-6 h-4 rounded-md ${statusColors[u.status] || 'bg-gray-200'} ${statusTextColors[u.status] || 'text-gray-800'} dark:ring-1 dark:ring-white/10 shadow-sm" title="${u.status}" aria-hidden="true"></span>
+                                <select 
+                                    onchange="updateUnitStatus(${u.id}, this.value)" 
+                                    class="border rounded px-1 py-0.5 text-xs text-gray-800 dark:text-white ${statusColors[u.status]} ${statusTextColors[u.status] || ''}"
+                                    ${isAssigned ? 'disabled title="Assigned to incident"' : ''}
+                                >
+                                    ${statusOptions.map(s => `<option value="${s}" ${u.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+                                </select>
+                            </div>
                             
                             <button 
                                 onclick="deleteUnit(${u.id})" 
-                                class="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm"
+                                class="bg-gray-500 hover:bg-gray-600 text-white px-2 py-0.5 rounded text-xs"
+                                title="Eliminar unidad"
                             >
                                 Eliminar
                             </button>
@@ -721,7 +736,7 @@
                 // Mostrar todos los tipos de unidades, incluso los que tienen 0
                 typeContainer.innerHTML = unitTypes.map(type => 
                     `<li class="flex justify-between">
-                        <span class="inline-block px-2 py-0.5 rounded text-xs font-semibold ${typeColors[type]}">${type}</span>
+                        <span class="inline-block px-2 py-0.5 rounded-full bg-opacity-60 text-xs font-semibold ${typeColors[type]}">${typeAbbrev[type] || type}</span>
                         <strong class="text-blue-600">${typeCount[type] || 0}</strong>
                     </li>`
                 ).join('');
