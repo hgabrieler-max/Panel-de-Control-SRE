@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Despacho - JS Simple (Frecuencias)</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         .unit-card { transition: background-color 0.2s; }
         body {
@@ -51,7 +52,16 @@
         .dark .text-gray-800, .dark .text-gray-900 { color: #e6eef8 !important; }
         .dark .bg-gray-300, .dark .bg-gray-200 { background-color: #1f2937 !important; color: #e6eef8 !important; }
         .dark .bg-gray-300:hover { background-color: #374151 !important; }
-        .dark .unit-card { background: transparent !important; }
+    .dark .unit-card { background: transparent !important; }
+    /* Improve visibility of unit cards in dark mode: subtle elevation and left-side glow matching the border color */
+    .dark .unit-card { box-shadow: 0 6px 18px rgba(2,6,23,0.45); }
+    /* Colored left glows for common border utilities used on unit cards */
+    .dark .unit-card.border-red-500 { box-shadow: 0 6px 18px rgba(2,6,23,0.45), -6px 0 18px rgba(220,38,38,0.18); }
+    .dark .unit-card.border-green-500 { box-shadow: 0 6px 18px rgba(2,6,23,0.45), -6px 0 18px rgba(16,185,129,0.16); }
+    .dark .unit-card.border-yellow-400, .dark .unit-card.border-yellow-500 { box-shadow: 0 6px 18px rgba(2,6,23,0.45), -6px 0 18px rgba(234,179,8,0.16); }
+    .dark .unit-card.border-gray-500, .dark .unit-card.border-gray-400 { box-shadow: 0 6px 18px rgba(2,6,23,0.45), -6px 0 18px rgba(107,114,128,0.12); }
+    /* Fallback stronger left border for cards that remain hard to see */
+    .dark .unit-card { outline: 1px solid rgba(255,255,255,0.02); }
           /* Ensure freq/status indicators are hidden in light mode and shown only in dark mode
               This is explicit CSS so it works even if Tailwind's generated dark: variants are missing */
           .freq-indicator, .status-indicator { display: none !important; }
@@ -62,9 +72,40 @@
         .dark [data-type="AIR"] { background-color: #0b0f12 !important; color: #cbd5e1 !important; }
         .dark [data-type="TSU"] { background-color: #2b2a07 !important; color: #fef3c7 !important; }
         .dark [data-type="ISB"] { background-color: #071229 !important; color: #bfdbfe !important; }
+          /* Neutralize per-type full-header backgrounds in dark mode so headers remain neutral
+              and only the small .type-strip indicates the type color (matches Lifeguard style) */
+          .dark [data-type] { background-color: transparent !important; color: inherit !important; }
         /* Visual for drag-over when reordering categories */
         .drag-over { outline: 3px dashed rgba(59,130,246,0.45); transform: translateY(-2px); }
-        /* Visible resizers between columns */
+        /* Large subtle background logo for State Parks */
+        .nature-bg {
+            position: relative;
+            overflow: visible;
+        }
+        /* Use a pseudo-element so the logo sits behind content and can be toned down */
+        .nature-bg::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: url('../Pictures/Screenshots/san_andreas_state_parks_logo.png');
+            background-repeat: no-repeat;
+            background-position: center 30%;
+            /* slightly larger and more visible */
+            background-size: 45% auto;
+            opacity: 0.14;
+            pointer-events: none;
+            z-index: 0;
+            filter: saturate(0.5) brightness(1.05);
+        }
+        /* Stronger logo visibility in dark mode */
+        .dark .nature-bg::before {
+            opacity: 0.18 !important;
+            filter: saturate(0.6) brightness(1.05) contrast(0.95) !important;
+        }
+        /* (secondary logo removed) */
+        /* Ensure main content sits above the pseudo-element */
+        .nature-bg > * { position: relative; z-index: 2; }
+    /* Visible resizers between columns */
         .visible-resizer {
             position: absolute;
             top: 0;
@@ -82,6 +123,75 @@
             opacity: 0; /* ensure fully transparent */
         }
         .visible-resizer:hover { background: transparent; }
+        .resizer-handle {
+            width: 18px; height: 18px; border-radius: 50%; background: rgba(34,197,94,0.9); border: none; opacity: 0; transition: opacity 120ms ease;
+            display:block; cursor: pointer;
+        }
+        .visible-resizer:hover .resizer-handle { opacity: 1; }
+        .resizer-popup {
+            position: absolute; right: 22px; top: 6px; background: white; border: 1px solid rgba(0,0,0,0.08); padding: 8px; border-radius: 6px; z-index: 10000; box-shadow: 0 6px 24px rgba(2,6,23,0.08);
+            width: 220px;
+        }
+        .resizer-popup.hidden { display: none; }
+        .resizer-popup .btn-close { background: transparent; border: none; color: #333; cursor: pointer; font-size: 12px; }
+        .resizer-popup .btn-inc, .resizer-popup .btn-dec { width: 28px; height: 28px; border-radius:6px; border:none; background:#eee; cursor:pointer; }
+        /* Top-left small delete button that appears only on hover of the unit card */
+        .unit-card { position: relative; padding-top: 1.5rem; }
+
+        /* thin colored strip shown at left of headers in dark mode */
+        .type-strip {
+            display: inline-block;
+            width: 6px;
+            height: 28px;
+            margin-right: 8px;
+            border-radius: 4px;
+            flex: 0 0 auto;
+        }
+        .unit-delete {
+            position: absolute;
+            left: 8px;
+            top: 6px; /* slightly higher so it doesn't overlap the first line when visible */
+            width: 20px;
+            height: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            background: rgba(75,85,99,0.9); /* slate-600 */
+            color: #fff;
+            font-weight: 700;
+            font-size: 11px;
+            line-height: 1;
+            border: none;
+            cursor: pointer;
+            opacity: 0;
+            transform: translateY(-6px) scale(0.9);
+            transition: opacity 140ms ease, transform 140ms ease, background-color 120ms ease;
+            z-index: 20;
+        }
+        .unit-card:hover .unit-delete { opacity: 1; transform: translateY(0) scale(1); }
+    .unit-delete:hover { background: rgba(220,38,38,0.95); }
+
+    /* Enter animation for newly added unit cards */
+    .unit-card-enter { opacity: 0; transform: translateY(8px) scale(0.995); }
+    .unit-card-enter.unit-card-enter-active { opacity: 1; transform: translateY(0) scale(1); transition: opacity 260ms cubic-bezier(.2,.9,.3,1), transform 260ms cubic-bezier(.2,.9,.3,1); }
+
+    /* Left colored status stripe for unit cards */
+    .unit-card::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 6px;
+        border-top-left-radius: 0.5rem; /* match .rounded-lg */
+        border-bottom-left-radius: 0.5rem;
+        background: rgba(107,114,128,0.35); /* default muted */
+    }
+    .unit-card.status-codigo14::before { background: #22c55e; } /* green-500 */
+    .unit-card.status-codigo7::before { background: #eab308; }  /* yellow-500 */
+    .unit-card.status-codigo6::before { background: #f59e0b; }  /* amber/yellow-400 */
+    .unit-card.status-codigorojo::before { background: #dc2626; } /* red-600 */
     </style>
 </head>
 <body class="nature-bg p-4 min-h-screen">
@@ -111,11 +221,13 @@
                     onkeydown="if(event.key === 'Enter') { addUnit(); }"
                 >
                 <select id="newUnitType" class="border rounded px-2 py-1">
-                    <option value="Warden">Warden</option>
-                    <option value="Ranger">Ranger</option>
+                    <option value="Warden">SAFW</option>
+                    <option value="Ranger">SAPR</option>
                     <option value="AIR">AIR</option>
-                    <option value="TSU">TSU</option>
-                    <option value="ISB">ISB</option> <!-- Nueva opción -->
+                    <option value="TSU">SP</option>
+                    <option value="ISB">ISB</option>
+                    <option value="LG">LG</option>
+                    <option value="CHP">CHP</option>
                 </select>
                 <button onclick="addUnit()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded font-semibold">Agregar</button>
             </div>
@@ -146,8 +258,8 @@
                 </div>
         </div>
 
-        <!-- Resúmenes: altura fija y scroll -->
-        <div class="nature-glass space-y-4 h-[100vh] overflow-y-auto">
+    <!-- Resúmenes: altura fija y scroll -->
+    <div class="nature-glass space-y-4 h-[90vh] overflow-y-auto">
             <div class="bg-white shadow-xl rounded-lg p-4">
                 <h3 class="text-lg font-bold mb-2 text-gray-700">Frecuencias activas</h3>
                 <ul id="frequencySummary" class="text-sm space-y-1">
@@ -189,8 +301,8 @@
                     <ul id="incidentHistory" class="text-sm space-y-1"></ul>
                     <h3 class="text-lg font-bold mt-4 mb-2 text-gray-700">Historial de unidades</h3>
                     <ul id="unitHistory" class="text-sm space-y-1"></ul>
-                </div>
-            </div>
+                        </div>
+                    </div>
         </div>
         
     </div>
@@ -204,17 +316,21 @@
             Ranger: "bg-green-700/60 text-white",
             // Make Warden background less intense by using a semi-transparent blue
             Warden: "bg-blue-700/60 text-white",
-            TSU: "bg-yellow-700/60 text-white",
+            TSU: "bg-yellow-400/60 text-yellow-900",
+            LG: "bg-cyan-700/60 text-white",
             AIR: "bg-gray-700/60 text-white",
-            ISB: "bg-indigo-700/60 text-white"
+            ISB: "bg-indigo-700/60 text-white",
+            CHP: "bg-amber-700/60 text-white"
         };
         // Clases para la barra de cada tipo (fondo y texto)
         const typeBarClasses = {
             Ranger: 'bg-green-100/60 text-green-800',
             Warden: 'bg-blue-100/60 text-blue-800',
-            TSU: 'bg-yellow-100/60 text-yellow-800',
+            TSU: 'bg-yellow-50/60 text-yellow-800',
+            LG: 'bg-cyan-50/60 text-cyan-800',
             AIR: 'bg-gray-100/60 text-gray-800',
-            ISB: 'bg-blue-50/60 text-blue-800'
+            ISB: 'bg-blue-50/60 text-blue-800',
+            CHP: 'bg-amber-100/60 text-amber-800'
         };
         const statusColors = {
             // Light / Dark variants so colors remain visible in both themes
@@ -230,6 +346,17 @@
             "Código 6": "text-yellow-900 dark:text-white",
             "Codigo Rojo": "text-red-900 dark:text-white",
         };
+
+        // Helper: map status to unit-card class for left stripe
+        function getStatusCardClass(status) {
+            switch (status) {
+                case 'Código 14': return 'status-codigo14';
+                case 'Código 7': return 'status-codigo7';
+                case 'Código 6': return 'status-codigo6';
+                case 'Codigo Rojo': return 'status-codigorojo';
+                default: return '';
+            }
+        }
         
         // ¡LISTA DE FRECUENCIAS ACTUALIZADA!
         const frequencies = [
@@ -257,12 +384,16 @@
             "MAID-4",
             "MAID-5",
             "MAID-6",
+            "LFG TAC-1",
+            "LFG TAC-2",
+            "LFG LTAC-1",
+            "LFG LTAC-2",
         ];
 
     // Devuelve clases Tailwind para una frecuencia (colores en modo claro + variantes dark)
     function getFrequencyClasses(freq) {
         // TAC, LTAC, WTAC, WLTAC -> amarillo
-        if (/^(TAC|LTAC|WTAC|WLTAC)/.test(freq)) {
+        if (/^(TAC|LTAC|WTAC|WLTAC)/.test(freq) || /(\s|^)TAC-|^(LFG\sLTAC-)/.test(freq)) {
             return 'bg-yellow-200 text-yellow-800 dark:bg-yellow-600 dark:text-white';
         }
         // MAID -> naranja
@@ -277,14 +408,21 @@
         return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-white';
     }
 
-    const defaultUnitTypes = ["Warden", "Ranger", "AIR", "TSU", "ISB"];
+    const defaultUnitTypes = ["Warden", "Ranger", "AIR", "TSU", "ISB", "LG", "CHP"];
     // Persistible order of unit types. Load from localStorage or use default order.
     function loadUnitTypes() {
         try {
             const raw = localStorage.getItem('unitTypesOrder');
             if (raw) {
                 const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    // Merge stored order with defaults: keep user ordering but append any missing default types
+                    const merged = [...parsed];
+                    for (const d of defaultUnitTypes) {
+                        if (!merged.includes(d)) merged.push(d);
+                    }
+                    return merged;
+                }
             }
         } catch (e) { /* ignore */ }
         return [...defaultUnitTypes];
@@ -299,14 +437,18 @@
         Ranger: 'S.A Parks And Recreation',
         AIR: 'Aviation Unit',
         ISB: 'Investigative Service Branch',
-        TSU: 'Traffic Safety Unit'
+        TSU: 'State Patrol Branch',
+        LG: 'S.A. Lifeguard',
+        CHP: 'Commission of Highway Patrol'
     };
     const typeAbbrev = {
         Warden: 'SAFW',
         Ranger: 'SAPR',
         AIR: 'AIR',
         ISB: 'ISB',
-        TSU: 'TSU'
+        TSU: 'SP',
+        LG: 'LG',
+        CHP: 'CHP'
     };
     // Estado de expansión por tipo (true = abierto)
     let expandedTypes = {};
@@ -359,6 +501,8 @@
                     }
                 }
             }
+            // Re-render units/incidents so header strips appear immediately after theme change
+            try { renderUnits(); renderIncidents(); } catch(e) { /* safe fallback */ }
         }
 
         function toggleDarkMode() {
@@ -375,6 +519,8 @@
         // Historiales globales
         let incidentHistory = [];
         let unitHistory = [];
+    // Track recently added units so we can animate them on render
+    let recentlyAddedUnits = new Set();
 
         // --- 3. FUNCIONES DE RENDERIZADO (DIBUJAR LA PANTALLA) ---
 
@@ -397,7 +543,14 @@
                 unitsByType[t].sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'}));
             }
 
+            let totalUnits = 0;
             for (const type of unitTypes) {
+                const hasUnits = (unitsByType[type] && unitsByType[type].length > 0);
+                totalUnits += (unitsByType[type] ? unitsByType[type].length : 0);
+                if (!hasUnits) {
+                    // Skip rendering empty categories
+                    continue;
+                }
                 const section = document.createElement('div');
                 section.className = 'mt-2';
                 section.setAttribute('draggable', 'true');
@@ -406,14 +559,22 @@
                 // Header plegable
                 const header = document.createElement('div');
                 header.className = 'flex items-center justify-between cursor-pointer select-none p-2 rounded';
-                const barClasses = typeBarClasses[type] || 'bg-gray-100 text-gray-700';
-                // In light mode we want a slightly transparent bar for visual softness
-                const opacityClass = darkMode ? '' : ' bg-opacity-60';
+                // In dark mode we show a neutral header plus a thin colored strip for the type
+                const neutralHeader = darkMode ? 'bg-gray-800 text-gray-100' : (typeBarClasses[type] || 'bg-gray-100 text-gray-700');
+                // derive a background-only class for the strip (typeColors may include text classes)
+                let stripClass = '';
+                if (typeColors[type]) {
+                    const parts = (typeColors[type] || '').split(/\s+/);
+                    const bgPart = parts.find(p => p.startsWith('bg-')) || parts[0] || '';
+                    stripClass = bgPart;
+                }
+                const stripHtml = darkMode ? `<span class="type-strip ${stripClass}" aria-hidden="true"></span>` : '';
                 header.innerHTML = `
-                    <div class="w-full">
-                            <div 
+                    <div class="w-full flex items-center">
+                        ${stripHtml}
+                        <div 
                             data-type="${type}" 
-                            class="flex items-center justify-between ${barClasses}${opacityClass} rounded px-3 py-1 cursor-pointer transform transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-400" 
+                            class="flex items-center justify-between ${neutralHeader} rounded px-3 py-1 cursor-pointer transform transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-400 w-full" 
                             onclick="toggleType('${type}')" 
                             role="button" 
                             tabindex="0" 
@@ -480,8 +641,13 @@
 
                     const unitElement = document.createElement('div');
                     // Make the card responsive: stack content vertically on small, arrange in a row on md+ so it fits two per line
-                    unitElement.className = `unit-card p-4 rounded-lg shadow-md text-base border-l-4 ${typeColors[u.type]} ${isAssigned ? 'border-red-500' : 'border-green-500'} flex flex-col md:flex-row justify-between items-center min-h-20`;
+                        // If this unit was just added, give it the enter class so it animates
+                        const enterCls = recentlyAddedUnits.has(u.id) ? 'unit-card-enter' : '';
+                        // Soft neutral border with a left colored stripe based on status
+                        const statusStripeClass = getStatusCardClass(u.status);
+                        unitElement.className = `${enterCls} unit-card ${statusStripeClass} p-4 rounded-lg shadow-md text-base border border-gray-200 dark:border-gray-700 flex flex-col md:flex-row justify-between items-center min-h-20 bg-white dark:bg-transparent`;
                     unitElement.innerHTML = `
+                        <button onclick="event.stopPropagation(); deleteUnit(${u.id})" class="unit-delete" title="Eliminar unidad">×</button>
                         <div>
                             <p class="font-bold text-base">${u.name}</p>
                             <span class="block mt-1 inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-opacity-60 ${typeColors[u.type] || 'bg-gray-200 text-gray-800'}" title="${typeDisplayFull[u.type] || u.type}">${typeAbbrev[u.type] || u.type}</span>
@@ -510,18 +676,19 @@
                                     ${statusOptions.map(s => `<option value="${s}" ${u.status === s ? 'selected' : ''}>${s}</option>`).join('')}
                                 </select>
                             </div>
-                            
-                            <button 
-                                onclick="deleteUnit(${u.id})" 
-                                class="bg-gray-500 hover:bg-gray-600 text-white px-2 py-0.5 rounded text-xs"
-                                title="Eliminar unidad"
-                            >
-                                Eliminar
-                            </button>
                         </div>
                     `;
 
                     listDiv.appendChild(unitElement);
+                        // If it was recently added, trigger the active state on the next microtask and then clear the mark
+                        if (recentlyAddedUnits.has(u.id)) {
+                            // Force a reflow then add active class to animate
+                            requestAnimationFrame(() => {
+                                unitElement.classList.add('unit-card-enter-active');
+                                // Remove the marker after animation so future renders don't re-animate
+                                setTimeout(() => { recentlyAddedUnits.delete(u.id); }, 400);
+                            });
+                        }
                 });
 
                 // After building list, set open/closed state without animation based on expandedTypes
@@ -541,6 +708,14 @@
 
                 section.appendChild(listDiv);
                 container.appendChild(section);
+            }
+
+            // Si no hay ninguna unidad en ninguna categoría, mostrar un placeholder
+            if (totalUnits === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'text-sm text-gray-500 italic p-2';
+                empty.textContent = 'No hay unidades creadas.';
+                container.appendChild(empty);
             }
 
             renderSummaries();
@@ -665,7 +840,7 @@
                                             onclick="toggleAssignUnit(${i.id}, ${u.id})" 
                                             class="px-2 py-1 rounded text-xs font-semibold transition ${isAssigned ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
                                         >
-                                            ${u.name} ${isAssigned ? '✅' : ''}
+                                            ${u.name}
                                         </button>
                                     `;
                                 })
@@ -751,8 +926,9 @@
                 units.forEach(u => {
                     typeCount[u.type] = (typeCount[u.type] || 0) + 1;
                 });
-                // Mostrar todos los tipos de unidades, incluso los que tienen 0
-                typeContainer.innerHTML = unitTypes.map(type => 
+                // Mostrar solo los tipos de unidades con al menos 1 unidad
+                const nonEmptyTypes = unitTypes.filter(type => (typeCount[type] || 0) > 0);
+                typeContainer.innerHTML = nonEmptyTypes.map(type => 
                     `<li class="flex justify-between">
                         <span class="inline-block px-2 py-0.5 rounded-full bg-opacity-60 text-xs font-semibold ${typeColors[type]}">${typeAbbrev[type] || type}</span>
                         <strong class="text-blue-600">${typeCount[type] || 0}</strong>
@@ -1092,19 +1268,35 @@
             // Unidades
             const unitList = document.getElementById('unitHistory');
             if (unitList) {
-                unitList.innerHTML = unitHistory.map(u => 
-                    `<li>
-                        <span class="font-semibold">${u.name}</span>
-                        <span class="text-xs text-gray-500">(${u.type})</span>
-                        <div class="text-xs text-gray-400">Inicio: ${u.startTime ? formatUTC(u.startTime) : ''}</div>
-                        <div class="text-xs text-gray-400">Fin: ${u.endTime ? formatUTC(u.endTime) : 'En servicio'}</div>
-                        <span class="text-xs text-gray-400">Estado: ${u.status}, Frecuencia: ${u.frequency}</span>
-                    </li>`
-                ).join('');
+                // Group unitHistory by type for clearer presentation
+                const grouped = unitHistory.reduce((acc, u) => {
+                    (acc[u.type] = acc[u.type] || []).push(u);
+                    return acc;
+                }, {});
+
+                // Respect persisted unitTypes order and use full display names when possible
+                const orderedTypes = [
+                    ...unitTypes.filter(t => Object.prototype.hasOwnProperty.call(grouped, t)),
+                    ...Object.keys(grouped).filter(t => !unitTypes.includes(t))
+                ];
+
+                unitList.innerHTML = orderedTypes.map(type => {
+                    const items = grouped[type].map(u => `
+                        <li>
+                            <span class="font-semibold">${u.name}</span>
+                            <span class="text-xs text-gray-500">(${typeAbbrev[u.type] || typeDisplayFull[u.type] || u.type})</span>
+                            <div class="text-xs text-gray-400">Inicio: ${u.startTime ? formatUTC(u.startTime) : ''}</div>
+                            <div class="text-xs text-gray-400">Fin: ${u.endTime ? formatUTC(u.endTime) : 'En servicio'}</div>
+                            <span class="text-xs text-gray-400">Estado: ${u.status}, Frecuencia: ${u.frequency}</span>
+                        </li>
+                    `).join('');
+                    const display = (typeDisplayFull && typeDisplayFull[type]) ? typeDisplayFull[type] : type;
+                    return `<li class="mb-2"><div class="font-semibold text-sm">${display}</div><ul class="ml-2 list-disc">${items}</ul></li>`;
+                }).join('');
             }
         }
 
-        function downloadHistory() {
+        async function downloadHistory() {
             // Helper para formato UTC militar
             function formatUTC(date) {
                 const d = new Date(date);
@@ -1117,49 +1309,128 @@
                 return `${hh}:${min}:${ss} ${dd}/${mm}/${yyyy} UTC`;
             }
 
-            let text = "=== HISTORIAL DE INCIDENTES ===\n\n";
+            // Helper: load image and return dataURL or null
+            function loadImageDataUrl(src) {
+                return new Promise((resolve) => {
+                    try {
+                        const img = new Image();
+                        img.crossOrigin = 'anonymous';
+                        img.onload = () => {
+                            try {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = img.width;
+                                canvas.height = img.height;
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(img, 0, 0);
+                                const data = canvas.toDataURL('image/png');
+                                resolve(data);
+                            } catch (e) { resolve(null); }
+                        };
+                        img.onerror = () => resolve(null);
+                        img.src = '../Pictures/Screenshots/san_andreas_state_parks_logo.png';
+                    } catch (e) { resolve(null); }
+                });
+            }
+
+            const logoData = await loadImageDataUrl('../Pictures/Screenshots/san_andreas_state_parks_logo.png');
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+            const margin = 40;
+            let y = margin;
+            const lineHeight = 14;
+
+            // Header: logo + centered text
+            const pageWidth = doc.internal.pageSize.width;
+            const centerX = pageWidth / 2;
+            const headerHeight = 54;
+            if (logoData) {
+                // draw logo on left
+                try { doc.addImage(logoData, 'PNG', margin, y - 4, headerHeight, headerHeight); } catch(e) { /* ignore */ }
+            }
+            doc.setFontSize(16);
+            doc.setFont(undefined, 'bold');
+            doc.text('State Resource Enforcement', centerX, y + 12, { align: 'center' });
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'normal');
+            doc.text('Communications Center', centerX, y + 30, { align: 'center' });
+            y += headerHeight + 6;
+            doc.setDrawColor(0,0,0);
+            doc.setLineWidth(0.8);
+            doc.line(margin, y, pageWidth - margin, y);
+            y += 12;
+
+            // Incidentes
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.text('HISTORIAL DE INCIDENTES', margin, y);
+            y += 18;
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
             incidentHistory.forEach(i => {
-                text += `Incidente: ${i.title}\n`;
-                text += `Frecuencia: ${i.coordinationFrequency}\n`;
-                text += `Inicio: ${i.startTime ? formatUTC(i.startTime) : ''}\n`;
-                text += `Fin: ${i.endTime ? formatUTC(i.endTime) : 'En curso'}\n`;
-                text += `Unidades participantes: ${
-                    i.allUnits && i.allUnits.length
-                        ? i.allUnits.map(uid => {
-                            const u = unitHistory.find(unit => unit.id === uid) || units.find(unit => unit.id === uid);
-                            return u ? u.name : '';
-                        }).join(', ')
-                        : 'Ninguna'
-                }\n`;
-                // Write used frequencies to export applying rule: omit Law Enforcement unless it was the only frequency used
+                if (y > doc.internal.pageSize.height - margin) { doc.addPage(); y = margin; }
+                doc.setFont(undefined, 'bold');
+                doc.text(`Incidente: ${i.title}`, margin, y);
+                doc.setFont(undefined, 'normal');
+                y += lineHeight;
+                doc.text(`Frecuencia: ${i.coordinationFrequency}`, margin, y);
+                y += lineHeight;
+                doc.text(`Inicio: ${i.startTime ? formatUTC(i.startTime) : ''}`, margin, y);
+                y += lineHeight;
+                doc.text(`Fin: ${i.endTime ? formatUTC(i.endTime) : 'En curso'}`, margin, y);
+                y += lineHeight;
+                const participants = i.allUnits && i.allUnits.length
+                    ? i.allUnits.map(uid => (unitHistory.find(unit => unit.id === uid) || units.find(unit => unit.id === uid) || {}).name).filter(Boolean).join(', ')
+                    : 'Ninguna';
+                doc.text(`Unidades participantes: ${participants}`, margin, y);
+                y += lineHeight;
                 const used = Array.isArray(i.usedFrequencies) && i.usedFrequencies.length > 0 ? [...i.usedFrequencies] : [i.coordinationFrequency];
                 const filtered = used.length > 1 ? used.filter(f => f !== 'Law Enforcement') : used;
-                text += `Frecuencias usadas: ${filtered.join(', ')}\n`;
-                text += `Comentarios: ${i.comments && i.comments.length ? i.comments.join(' | ') : 'Sin comentarios'}\n`;
-                text += "\n";
+                doc.text(`Frecuencias usadas: ${filtered.join(', ')}`, margin, y);
+                y += lineHeight;
+                doc.text(`Comentarios: ${i.comments && i.comments.length ? i.comments.join(' | ') : 'Sin comentarios'}`, margin, y);
+                y += lineHeight * 1.5;
             });
 
-            text += "\n=== HISTORIAL DE UNIDADES ===\n\n";
-            unitHistory.forEach(u => {
-                text += `Unidad: ${u.name}\n`;
-                text += `Tipo: ${u.type}\n`;
-                text += `Inicio: ${u.startTime ? formatUTC(u.startTime) : ''}\n`;
-                text += `Fin: ${u.endTime ? formatUTC(u.endTime) : 'En servicio'}\n`;
-                text += `Estado: ${u.status}, Frecuencia: ${u.frequency}\n`;
-                text += "\n";
+            // Units grouped by type
+            doc.addPage();
+            y = margin;
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.text('HISTORIAL DE UNIDADES', margin, y);
+            y += 18;
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            const grouped = unitHistory.reduce((acc, u) => { (acc[u.type] = acc[u.type] || []).push(u); return acc; }, {});
+            // Respect unitTypes order and use display names
+            const orderedTypes = [
+                ...unitTypes.filter(t => Object.prototype.hasOwnProperty.call(grouped, t)),
+                ...Object.keys(grouped).filter(t => !unitTypes.includes(t))
+            ];
+            orderedTypes.forEach(type => {
+                if (y > doc.internal.pageSize.height - margin) { doc.addPage(); y = margin; }
+                const display = (typeDisplayFull && typeDisplayFull[type]) ? typeDisplayFull[type] : type;
+                doc.setFont(undefined, 'bold');
+                doc.text(display, margin, y);
+                doc.setFont(undefined, 'normal');
+                y += lineHeight;
+                (grouped[type] || []).forEach(u => {
+                    if (y > doc.internal.pageSize.height - margin) { doc.addPage(); y = margin; }
+                    const name = `- ${u.name} (${u.status})`;
+                    doc.text(name, margin + 10, y);
+                    y += lineHeight;
+                    doc.text(`Inicio: ${u.startTime ? formatUTC(u.startTime) : ''}`, margin + 16, y);
+                    y += lineHeight;
+                    doc.text(`Fin: ${u.endTime ? formatUTC(u.endTime) : 'En servicio'}`, margin + 16, y);
+                    y += lineHeight;
+                    doc.text(`Frecuencia: ${u.frequency}`, margin + 16, y);
+                    y += lineHeight * 1.2;
+                });
+                y += lineHeight;
             });
 
-            // Crear y descargar el archivo
-            const blob = new Blob([text], { type: "text/plain" });
-            const url = URL.createObjectURL(blob);
-
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "historial_despacho.txt";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            // Save the PDF
+            doc.save('historial_despacho.pdf');
         }
 
         // --- 5. INICIALIZACIÓN ---
@@ -1225,6 +1496,63 @@
                 r.className = 'visible-resizer';
                 r.dataset.index = String(i);
                 grid.appendChild(r);
+                // add a small visible handle that opens a popup for fine adjustments
+                const handle = document.createElement('button');
+                handle.type = 'button';
+                handle.className = 'resizer-handle';
+                handle.title = 'Ajustar columnas';
+                r.appendChild(handle);
+                const popup = document.createElement('div');
+                popup.className = 'resizer-popup hidden';
+                popup.innerHTML = `
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <button class="btn-dec" title="-1">-</button>
+                        <input type="range" min="5" max="90" value="50" class="popup-range">
+                        <button class="btn-inc" title="+1">+</button>
+                    </div>
+                    <div style="text-align:right;margin-top:6px;"><button class="btn-close">Cerrar</button></div>
+                `;
+                r.appendChild(popup);
+                    // wire popup controls
+                    handle.addEventListener('click', (ev) => {
+                        ev.stopPropagation();
+                        popup.classList.toggle('hidden');
+                    });
+                    popup.querySelector('.btn-close').addEventListener('click', (ev) => { popup.classList.add('hidden'); ev.stopPropagation(); });
+                    const range = popup.querySelector('.popup-range');
+                    const btnInc = popup.querySelector('.btn-inc');
+                    const btnDec = popup.querySelector('.btn-dec');
+                    function getCurrentPercents() {
+                        const cols = window.getComputedStyle(grid).gridTemplateColumns.split(' ');
+                        const nums = cols.map(c => parseFloat(c));
+                        const sum = nums.reduce((s,n)=>s+n,0);
+                        return nums.map(n => Math.round((n/sum)*100));
+                    }
+                    function applyPercentLeft(leftPct, rightPct) {
+                        const cols = window.getComputedStyle(grid).gridTemplateColumns.split(' ');
+                        let other = [];
+                        for (let j=0;j<cols.length;j++) {
+                            if (j===i) other.push(leftPct + '%');
+                            else if (j===i+1) other.push(rightPct + '%');
+                            else other.push(cols[j]);
+                        }
+                        grid.style.gridTemplateColumns = other.join(' ');
+                        try { localStorage.setItem('gridCols', JSON.stringify(window.getComputedStyle(grid).gridTemplateColumns.split(' '))); } catch(e){}
+                        if (window.positionGridResizers) window.positionGridResizers();
+                    }
+                    // initialize range with current
+                    const init = getCurrentPercents();
+                    range.value = init[i];
+                    range.addEventListener('input', () => {
+                        const val = parseInt(range.value,10);
+                        const cur = getCurrentPercents();
+                        const otherPct = Math.max(5, cur[i+1] - (val - cur[i]));
+                        applyPercentLeft(val, otherPct);
+                    });
+                    btnInc.addEventListener('click', () => { range.value = Math.min(90, parseInt(range.value,10) + 1); range.dispatchEvent(new Event('input')); });
+                    btnDec.addEventListener('click', () => { range.value = Math.max(5, parseInt(range.value,10) - 1); range.dispatchEvent(new Event('input')); });
+                // style for handle and popup
+                // small inline styles rely on existing CSS classes added below
                 let dragging = false, startX = 0, startCols = [];
                 r.addEventListener('pointerdown', (ev) => {
                     dragging = true; startX = ev.clientX;
