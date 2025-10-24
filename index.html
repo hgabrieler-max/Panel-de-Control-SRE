@@ -768,16 +768,21 @@
             const cfg = getCloudConfig();
             return cfg && cfg.provider === 'firebase' && cfg.firebase && cfg.firebase.apiKey && cfg.firebase.projectId && cfg.docPath && cfg.statePath;
         }
-        // Lazy load Firebase compat SDKs if needed
+        // Lazy load Firebase compat SDKs if needed (app, auth, firestore) and ensure anonymous auth
         let __firebaseLoading = null; let __firebaseInited = false;
         async function ensureFirebase(){
-            if (window.firebase && window.firebase.firestore) return true;
+            // If already loaded and initialized, still ensure we're signed in anonymously
+            if (window.firebase && window.firebase.firestore) {
+                try { if (window.firebase.auth && !window.firebase.auth().currentUser) { await window.firebase.auth().signInAnonymously(); } } catch(e){}
+                return true;
+            }
             if (!__firebaseLoading) {
                 __firebaseLoading = new Promise((resolve,reject)=>{
                     function add(src){
                         return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=()=>res(); s.onerror=rej; document.head.appendChild(s); });
                     }
                     add('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js')
+                        .then(()=> add('https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js'))
                         .then(()=> add('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js'))
                         .then(()=> resolve(true)).catch(reject);
                 });
@@ -787,6 +792,8 @@
             if (!__firebaseInited && cfg && cfg.firebase) {
                 try { window.firebase.initializeApp(cfg.firebase); __firebaseInited = true; } catch(e){ /* already initialized */ __firebaseInited = true; }
             }
+            // Ensure we have an auth user so rules with request.auth != null pass
+            try { if (window.firebase.auth && !window.firebase.auth().currentUser) { await window.firebase.auth().signInAnonymously(); } } catch(e){}
             return true;
         }
         function getUsersDocRef(){
@@ -1856,6 +1863,38 @@
             );
             // persist immediately so cloud sync can propagate title edits
             try { saveState(); } catch(e){}
+        }
+
+        // Actualiza estado del incidente (activo / código 4) y refleja en historial
+        function updateIncidentStatus(incidentId, value) {
+            const now = new Date();
+            const actor = getSessionName();
+            incidents = incidents.map(i => {
+                if (i.id === incidentId) {
+                    if (value === 'codigo4') {
+                        i.codigo4 = true;
+                        i.active = false;
+                        i.endTime = now;
+                    } else {
+                        i.codigo4 = false;
+                        i.active = true;
+                        i.endTime = null;
+                    }
+                }
+                return i;
+            });
+            const hist = incidentHistory.find(h => h.id === incidentId);
+            if (hist) {
+                if (value === 'codigo4') {
+                    hist.endTime = now;
+                    try { if (!hist.endedBy) hist.endedBy = actor; } catch(e){}
+                } else {
+                    // Reabrir incidente: quitar marca de cierre
+                    hist.endTime = null;
+                    try { delete hist.endedBy; } catch(e){}
+                }
+            }
+            renderIncidents();
         }
 
         /**
