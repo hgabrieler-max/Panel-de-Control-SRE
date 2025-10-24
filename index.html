@@ -404,8 +404,9 @@
     const AUTH_SESSION_ROLE = 'dispatchAuthedRoleV1';
     const AUTH_ACCESS_LOG_KEY = 'dispatchAccessLogV1';
     const ADMIN_PASSWORD = 'hola1234';
-    const AUTH_SESSION_DEPT = 'dispatchAuthedDeptV1'; // 'SAFW' | 'SAPR'
+    const AUTH_SESSION_DEPT = 'dispatchAuthedDeptV1'; // 'SAFW' | 'SAPR' | 'LSPD'
     const CLOUD_CONFIG_KEY = 'dispatchCloudConfigV1'; // { provider:'firebase', firebase:{...}, docPath:'dispatch/users' }
+    const AUTH_USERS_UPDATED_AT = 'dispatchAuthUsersUpdatedAtV1';
         
         // Colores y Etiquetas
         const typeColors = {
@@ -749,7 +750,8 @@
             const snap = await ref.get();
             const data = snap.exists ? snap.data() : {};
             const list = Array.isArray(data.list) ? data.list : [];
-            return list;
+            const updatedAt = typeof data.updatedAt === 'number' ? data.updatedAt : 0;
+            return { list, updatedAt };
         }
         async function cloudUsersWrite(users){
             await ensureFirebase();
@@ -762,16 +764,26 @@
             const ref = getFirestoreDocRef(); if (!ref) return () => {};
             if (__cloudUnsub) { try { __cloudUnsub(); } catch(e){} __cloudUnsub = null; }
             __cloudUnsub = ref.onSnapshot((snap)=>{
-                try { const data = snap.data() || {}; const list = Array.isArray(data.list)? data.list: []; callback(list); } catch(e){}
+                try { const data = snap.data() || {}; const list = Array.isArray(data.list)? data.list: []; const updatedAt = typeof data.updatedAt==='number'? data.updatedAt: 0; callback({ list, updatedAt }); } catch(e){}
             });
             return __cloudUnsub;
         }
         async function syncUsersFromCloud(){
             if (!isCloudEnabled()) return;
-            const remote = await cloudUsersRead();
-            if (Array.isArray(remote)) {
-                // Overwrite local users with cloud copy to keep single source of truth
-                localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(remote));
+            const { list, updatedAt } = await cloudUsersRead();
+            const localUsers = getUsers();
+            const localUpdated = parseInt(localStorage.getItem(AUTH_USERS_UPDATED_AT)||'0',10) || 0;
+            if (Array.isArray(list) && list.length > 0) {
+                // If remote is newer or local is empty, accept remote
+                if (updatedAt >= localUpdated || localUsers.length === 0) {
+                    localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(list));
+                    localStorage.setItem(AUTH_USERS_UPDATED_AT, String(updatedAt||Date.now()));
+                }
+            } else {
+                // Remote empty: seed from local if exists
+                if (localUsers.length > 0) {
+                    await cloudUsersWrite(localUsers);
+                }
             }
         }
         // Admin panel cloud UI handlers
@@ -811,9 +823,20 @@
         async function cloudPullUsers(){
             try {
                 if (!isCloudEnabled()) { const m=document.getElementById('cloudMsg'); if(m) m.textContent='Cloud desactivado.'; return; }
-                const list = await cloudUsersRead();
-                if (Array.isArray(list)) { localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(list)); renderOperatorList(); }
-                const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Descargado ${list.length||0} operadores.`;
+                const { list, updatedAt } = await cloudUsersRead();
+                const localUsers = getUsers();
+                const localUpdated = parseInt(localStorage.getItem(AUTH_USERS_UPDATED_AT)||'0',10) || 0;
+                if (Array.isArray(list) && list.length > 0) {
+                    if (updatedAt >= localUpdated || localUsers.length === 0) {
+                        localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(list));
+                        localStorage.setItem(AUTH_USERS_UPDATED_AT, String(updatedAt||Date.now()));
+                        renderOperatorList();
+                    }
+                } else if (localUsers.length > 0) {
+                    // Seed cloud with local users
+                    await cloudUsersWrite(localUsers);
+                }
+                const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Sincronización completada.`;
             } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent='Error al descargar.'; }
         }
         async function cloudPushUsers(){
@@ -827,9 +850,19 @@
         async function cloudStartSubscription(){
             try {
                 if (!isCloudEnabled()) { const m=document.getElementById('cloudMsg'); if(m) m.textContent='Cloud desactivado.'; return; }
-                await cloudSubscribeUsers((list)=>{
-                    try { localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(list||[])); } catch(e){}
-                    renderOperatorList();
+                await cloudSubscribeUsers(({list, updatedAt})=>{
+                    try {
+                        const localUsers = getUsers();
+                        const localUpdated = parseInt(localStorage.getItem(AUTH_USERS_UPDATED_AT)||'0',10) || 0;
+                        if (Array.isArray(list) && list.length > 0) {
+                            if (updatedAt >= localUpdated || localUsers.length === 0) {
+                                localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(list));
+                                localStorage.setItem(AUTH_USERS_UPDATED_AT, String(updatedAt||Date.now()));
+                                renderOperatorList();
+                            }
+                        }
+                        // if remote empty, ignore to avoid wiping local unintentionally
+                    } catch(e){}
                 });
                 const m=document.getElementById('cloudMsg'); if(m) m.textContent='Suscripción activada.';
             } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent='Error al suscribir.'; }
@@ -864,7 +897,7 @@
             return [];
         }
         function saveUsers(users){
-            try { localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(users)); } catch(e){}
+            try { localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(users)); localStorage.setItem(AUTH_USERS_UPDATED_AT, String(Date.now())); } catch(e){}
             // Also push to cloud if configured
             try { if (isCloudEnabled()) { cloudUsersWrite(users); } } catch(e){}
         }
