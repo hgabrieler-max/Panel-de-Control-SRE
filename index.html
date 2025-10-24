@@ -250,7 +250,7 @@
                 </div>
                 <div>
                     <div class="flex items-center justify-between mb-2">
-                        <h3 class="font-semibold text-gray-800">Sincronización en la nube (operadores)</h3>
+                        <h3 class="font-semibold text-gray-800">Sincronización en la nube</h3>
                     </div>
                     <div class="space-y-2 text-xs">
                         <label class="block text-gray-700">Proveedor:</label>
@@ -260,13 +260,28 @@
                         </select>
                         <label class="block text-gray-700 mt-2">Config Firebase (JSON):</label>
                         <textarea id="cloudFirebaseJson" class="border rounded px-2 py-1 w-full h-24" placeholder='{"apiKey":"...","authDomain":"...","projectId":"..."}'></textarea>
-                        <label class="block text-gray-700 mt-2">Ruta del documento (Firestore):</label>
-                        <input id="cloudDocPath" type="text" class="border rounded px-2 py-1 w-full" placeholder="dispatch/users" />
-                        <div class="flex flex-wrap gap-2 mt-2">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                            <div>
+                                <label class="block text-gray-700">Ruta de operadores (Firestore):</label>
+                                <input id="cloudDocPath" type="text" class="border rounded px-2 py-1 w-full" placeholder="dispatch/users" />
+                                <div class="flex flex-wrap gap-2 mt-2">
+                                    <button onclick="cloudPullUsers()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded">Bajar operadores</button>
+                                    <button onclick="cloudPushUsers()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded">Subir operadores</button>
+                                    <button onclick="cloudStartSubscription()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded">Suscribir operadores</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-gray-700">Ruta de estado (Firestore):</label>
+                                <input id="cloudStatePath" type="text" class="border rounded px-2 py-1 w-full" placeholder="dispatch/state" />
+                                <div class="flex flex-wrap gap-2 mt-2">
+                                    <button onclick="cloudPullState()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded">Bajar estado</button>
+                                    <button onclick="cloudPushState()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded">Subir estado</button>
+                                    <button onclick="cloudStartStateSubscription()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded">Suscribir estado</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 mt-3">
                             <button onclick="saveCloudConfig()" class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded">Guardar config</button>
-                            <button onclick="cloudPullUsers()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded">Bajar operadores</button>
-                            <button onclick="cloudPushUsers()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded">Subir operadores</button>
-                            <button onclick="cloudStartSubscription()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded">Activar suscripción</button>
                         </div>
                         <p id="cloudMsg" class="text-[11px] text-gray-600 mt-1"></p>
                     </div>
@@ -405,8 +420,9 @@
     const AUTH_ACCESS_LOG_KEY = 'dispatchAccessLogV1';
     const ADMIN_PASSWORD = 'hola1234';
     const AUTH_SESSION_DEPT = 'dispatchAuthedDeptV1'; // 'SAFW' | 'SAPR' | 'LSPD'
-    const CLOUD_CONFIG_KEY = 'dispatchCloudConfigV1'; // { provider:'firebase', firebase:{...}, docPath:'dispatch/users' }
+    const CLOUD_CONFIG_KEY = 'dispatchCloudConfigV1'; // { provider:'firebase', firebase:{...}, docPath:'dispatch/users', statePath:'dispatch/state' }
     const AUTH_USERS_UPDATED_AT = 'dispatchAuthUsersUpdatedAtV1';
+    const DISPATCH_UPDATED_AT = 'dispatchDataUpdatedAtV1';
         
         // Colores y Etiquetas
         const typeColors = {
@@ -738,15 +754,22 @@
             }
             return true;
         }
-        function getFirestoreDocRef(){
+        function getUsersDocRef(){
             const cfg = getCloudConfig();
             if (!cfg || !cfg.docPath) return null;
             const db = window.firebase.firestore();
             return db.doc(cfg.docPath);
         }
+        function getStateDocRef(){
+            const cfg = getCloudConfig();
+            const path = (cfg && (cfg.statePath || 'dispatch/state'));
+            if (!path) return null;
+            const db = window.firebase.firestore();
+            return db.doc(path);
+        }
         async function cloudUsersRead(){
             await ensureFirebase();
-            const ref = getFirestoreDocRef(); if (!ref) return [];
+            const ref = getUsersDocRef(); if (!ref) return [];
             const snap = await ref.get();
             const data = snap.exists ? snap.data() : {};
             const list = Array.isArray(data.list) ? data.list : [];
@@ -755,18 +778,89 @@
         }
         async function cloudUsersWrite(users){
             await ensureFirebase();
-            const ref = getFirestoreDocRef(); if (!ref) return;
+            const ref = getUsersDocRef(); if (!ref) return;
             await ref.set({ list: Array.isArray(users)? users: [], updatedAt: Date.now() }, { merge: true });
         }
         let __cloudUnsub = null;
         async function cloudSubscribeUsers(callback){
             await ensureFirebase();
-            const ref = getFirestoreDocRef(); if (!ref) return () => {};
+            const ref = getUsersDocRef(); if (!ref) return () => {};
             if (__cloudUnsub) { try { __cloudUnsub(); } catch(e){} __cloudUnsub = null; }
             __cloudUnsub = ref.onSnapshot((snap)=>{
                 try { const data = snap.data() || {}; const list = Array.isArray(data.list)? data.list: []; const updatedAt = typeof data.updatedAt==='number'? data.updatedAt: 0; callback({ list, updatedAt }); } catch(e){}
             });
             return __cloudUnsub;
+        }
+        // --- Cloud sync for main state ---
+        async function cloudStateRead(){
+            await ensureFirebase();
+            const ref = getStateDocRef(); if (!ref) return {};
+            const snap = await ref.get();
+            const data = snap.exists ? snap.data() : {};
+            const payload = (data && typeof data.payload === 'object') ? data.payload : {};
+            const updatedAt = typeof data.updatedAt === 'number' ? data.updatedAt : 0;
+            return { payload, updatedAt };
+        }
+        async function cloudStateWrite(payload){
+            await ensureFirebase();
+            const ref = getStateDocRef(); if (!ref) return;
+            await ref.set({ payload: payload || {}, updatedAt: Date.now() }, { merge: true });
+        }
+        let __cloudStateUnsub = null;
+        async function cloudSubscribeState(callback){
+            await ensureFirebase();
+            const ref = getStateDocRef(); if (!ref) return () => {};
+            if (__cloudStateUnsub) { try { __cloudStateUnsub(); } catch(e){} __cloudStateUnsub = null; }
+            __cloudStateUnsub = ref.onSnapshot((snap)=>{
+                try { const data = snap.data() || {}; const payload = (data && typeof data.payload==='object')? data.payload: {}; const updatedAt = typeof data.updatedAt==='number'? data.updatedAt: 0; callback({ payload, updatedAt }); } catch(e){}
+            });
+            return __cloudStateUnsub;
+        }
+        async function cloudPullState(){
+            try {
+                if (!isCloudEnabled()) { const m=document.getElementById('cloudMsg'); if(m) m.textContent='Cloud desactivado.'; return; }
+                const { payload, updatedAt } = await cloudStateRead();
+                const localRaw = localStorage.getItem(STORAGE_KEY);
+                const local = localRaw ? JSON.parse(localRaw) : null;
+                const localUpdated = parseInt(localStorage.getItem(DISPATCH_UPDATED_AT)||'0',10) || 0;
+                if (payload && Object.keys(payload).length > 0) {
+                    if (updatedAt >= localUpdated || !local) {
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+                        localStorage.setItem(DISPATCH_UPDATED_AT, String(updatedAt||Date.now()));
+                        syncFromStorage();
+                    }
+                } else if (local) {
+                    await cloudStateWrite(local);
+                }
+                const m=document.getElementById('cloudMsg'); if(m) m.textContent='Estado sincronizado.';
+            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent='Error al sincronizar estado.'; }
+        }
+        async function cloudPushState(){
+            try {
+                if (!isCloudEnabled()) { const m=document.getElementById('cloudMsg'); if(m) m.textContent='Cloud desactivado.'; return; }
+                const localRaw = localStorage.getItem(STORAGE_KEY);
+                const local = localRaw ? JSON.parse(localRaw) : {};
+                await cloudStateWrite(local);
+                const m=document.getElementById('cloudMsg'); if(m) m.textContent='Estado subido.';
+            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent='Error al subir estado.'; }
+        }
+        async function cloudStartStateSubscription(){
+            try {
+                if (!isCloudEnabled()) { const m=document.getElementById('cloudMsg'); if(m) m.textContent='Cloud desactivado.'; return; }
+                await cloudSubscribeState(({payload, updatedAt})=>{
+                    try {
+                        if (payload && Object.keys(payload).length > 0) {
+                            const localUpdated = parseInt(localStorage.getItem(DISPATCH_UPDATED_AT)||'0',10) || 0;
+                            if (updatedAt >= localUpdated) {
+                                localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+                                localStorage.setItem(DISPATCH_UPDATED_AT, String(updatedAt||Date.now()));
+                                syncFromStorage();
+                            }
+                        }
+                    } catch(e){}
+                });
+                const m=document.getElementById('cloudMsg'); if(m) m.textContent='Suscripción de estado activada.';
+            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent='Error al suscribir estado.'; }
         }
         async function syncUsersFromCloud(){
             if (!isCloudEnabled()) return;
@@ -792,19 +886,22 @@
             const provEl = document.getElementById('cloudProvider');
             const jsonEl = document.getElementById('cloudFirebaseJson');
             const pathEl = document.getElementById('cloudDocPath');
+            const stateEl = document.getElementById('cloudStatePath');
             if (provEl) provEl.value = cfg.provider || '';
             if (jsonEl) jsonEl.value = cfg.firebase ? JSON.stringify(cfg.firebase) : '';
             if (pathEl) pathEl.value = cfg.docPath || 'dispatch/users';
+            if (stateEl) stateEl.value = cfg.statePath || 'dispatch/state';
         }
         function saveCloudConfig(){
             const prov = (document.getElementById('cloudProvider')||{}).value || '';
             const json = (document.getElementById('cloudFirebaseJson')||{}).value || '';
             const path = (document.getElementById('cloudDocPath')||{}).value || '';
+            const statePath = (document.getElementById('cloudStatePath')||{}).value || '';
             let firebaseCfg = null;
             if (prov === 'firebase') {
                 try { firebaseCfg = json ? JSON.parse(json) : null; } catch(e){ firebaseCfg = null; }
                 if (!firebaseCfg || !path) { const m=document.getElementById('cloudMsg'); if(m) m.textContent='Config inválida.'; return; }
-                setCloudConfig({ provider:'firebase', firebase: firebaseCfg, docPath: path });
+                setCloudConfig({ provider:'firebase', firebase: firebaseCfg, docPath: path, statePath: statePath || 'dispatch/state' });
             } else {
                 setCloudConfig({});
             }
@@ -815,6 +912,9 @@
                     if (isCloudEnabled()) {
                         await cloudStartSubscription();
                         await cloudPullUsers();
+                        // also wire state sync
+                        await cloudStartStateSubscription();
+                        await cloudPullState();
                         const mm=document.getElementById('cloudMsg'); if(mm) mm.textContent='Conectado y sincronizado.';
                     }
                 } catch(err){ const mm=document.getElementById('cloudMsg'); if(mm) mm.textContent='No se pudo conectar a Firestore. Revisa reglas y ruta.'; }
@@ -1009,6 +1109,10 @@
                     expandedTypes
                 };
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                // track local updatedAt for conflict resolution
+                try { localStorage.setItem(DISPATCH_UPDATED_AT, String(Date.now())); } catch(e){}
+                // push to cloud if enabled
+                try { if (isCloudEnabled()) { cloudStateWrite(data); } } catch(e){}
             } catch (e) { /* ignore */ }
         }
         function restoreState() {
@@ -1711,6 +1815,8 @@
             incidents = incidents.map(i => 
                 i.id === incidentId ? { ...i, title: newTitle } : i
             );
+            // persist immediately so cloud sync can propagate title edits
+            try { saveState(); } catch(e){}
         }
 
         /**
@@ -2085,12 +2191,15 @@
             updateAdminUI();
             // Apply branding based on current session (none by default until login)
             applyDeptBranding();
-            // If cloud is configured, start a subscription and pull latest users so login works across devices
+            // If cloud is configured, start subscriptions and pull latest data so login/state work across devices
             try {
                 if (isCloudEnabled()) {
                     cloudStartSubscription();
                     // Also do an initial pull to hydrate quickly
                     cloudPullUsers();
+                    // state sync
+                    cloudStartStateSubscription();
+                    cloudPullState();
                 }
             } catch(e){}
         })();
