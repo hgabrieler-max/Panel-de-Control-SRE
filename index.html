@@ -423,6 +423,8 @@
     const CLOUD_CONFIG_KEY = 'dispatchCloudConfigV1'; // { provider:'firebase', firebase:{...}, docPath:'dispatch/users', statePath:'dispatch/state' }
     const AUTH_USERS_UPDATED_AT = 'dispatchAuthUsersUpdatedAtV1';
     const DISPATCH_UPDATED_AT = 'dispatchDataUpdatedAtV1';
+    // Prevent pushing empty initial state to cloud before first pull completes
+    let cloudReadyForStatePush = true;
         
         // Colores y Etiquetas
         const typeColors = {
@@ -833,6 +835,7 @@
                     await cloudStateWrite(local);
                 }
                 const m=document.getElementById('cloudMsg'); if(m) m.textContent='Estado sincronizado.';
+                try { cloudReadyForStatePush = true; } catch(e){}
             } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent='Error al sincronizar estado.'; }
         }
         async function cloudPushState(){
@@ -855,6 +858,7 @@
                                 localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
                                 localStorage.setItem(DISPATCH_UPDATED_AT, String(updatedAt||Date.now()));
                                 syncFromStorage();
+                                try { cloudReadyForStatePush = true; } catch(e){}
                             }
                         }
                     } catch(e){}
@@ -910,11 +914,13 @@
             (async () => {
                 try {
                     if (isCloudEnabled()) {
+                        try { cloudReadyForStatePush = false; } catch(e){}
                         await cloudStartSubscription();
                         await cloudPullUsers();
                         // also wire state sync
                         await cloudStartStateSubscription();
                         await cloudPullState();
+                        try { cloudReadyForStatePush = true; } catch(e){}
                         const mm=document.getElementById('cloudMsg'); if(mm) mm.textContent='Conectado y sincronizado.';
                     }
                 } catch(err){ const mm=document.getElementById('cloudMsg'); if(mm) mm.textContent='No se pudo conectar a Firestore. Revisa reglas y ruta.'; }
@@ -1112,7 +1118,7 @@
                 // track local updatedAt for conflict resolution
                 try { localStorage.setItem(DISPATCH_UPDATED_AT, String(Date.now())); } catch(e){}
                 // push to cloud if enabled
-                try { if (isCloudEnabled()) { cloudStateWrite(data); } } catch(e){}
+                try { if (isCloudEnabled() && cloudReadyForStatePush) { cloudStateWrite(data); } } catch(e){}
             } catch (e) { /* ignore */ }
         }
         function restoreState() {
@@ -2194,12 +2200,13 @@
             // If cloud is configured, start subscriptions and pull latest data so login/state work across devices
             try {
                 if (isCloudEnabled()) {
+                    try { cloudReadyForStatePush = false; } catch(e){}
                     cloudStartSubscription();
                     // Also do an initial pull to hydrate quickly
                     cloudPullUsers();
                     // state sync
                     cloudStartStateSubscription();
-                    cloudPullState();
+                    cloudPullState(); // will set cloudReadyForStatePush=true when done
                 }
             } catch(e){}
         })();
