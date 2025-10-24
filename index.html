@@ -215,11 +215,45 @@
         </div>
     </div>
 
+    <!-- Admin overlay -->
+    <div id="adminOverlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100000] hidden">
+        <div class="nature-glass rounded-lg p-5 w-full max-w-md shadow-2xl border">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-xl font-bold text-green-900">Panel de Administración</h2>
+                <button onclick="closeAdminPanel()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded">Cerrar</button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <h3 class="font-semibold mb-2 text-gray-800">Crear nuevo operador</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <input id="adminNewName" type="text" class="border px-3 py-2 rounded w-full md:col-span-1" placeholder="Nombre" />
+                        <input id="adminNewPass" type="password" class="border px-3 py-2 rounded w-full md:col-span-1" placeholder="Contraseña" />
+                        <button onclick="adminCreateOperator()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded font-semibold md:col-span-1">Crear</button>
+                    </div>
+                    <p id="adminCreateError" class="text-sm text-red-600 mt-1"></p>
+                </div>
+                <div>
+                    <h3 class="font-semibold mb-2 text-gray-800">Operadores existentes</h3>
+                    <ul id="operatorList" class="space-y-2 text-sm"></ul>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="font-semibold text-gray-800">Registro de accesos</h3>
+                        <button onclick="clearAccessLog()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded text-xs">Limpiar</button>
+                    </div>
+                    <ul id="accessLogList" class="space-y-1 text-xs max-h-56 overflow-y-auto"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="flex items-center justify-between mb-4 nature-glass p-4 rounded-lg">
         <div class="flex items-center gap-4">
             <h1 class="text-3xl font-extrabold text-green-900">Panel de Control</h1>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-3">
+            <span id="welcomeOwner" class="text-sm text-gray-700 hidden"></span>
+            <button id="adminBtn" onclick="openAdminPanel()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded font-semibold hidden" title="Panel de administración">Admin</button>
             <button id="darkModeBtn" onclick="toggleDarkMode()" class="bg-gray-200 hover:bg-gray-300 text-sm px-2 py-1 rounded" aria-pressed="false" title="Alternar modo oscuro/luminoso">
                 <!-- Icono inicial será insertado por applyDarkMode() -->
             </button>
@@ -341,8 +375,13 @@
         // --- 1. DEFINICIONES GLOBALES ---
         const DEFAULT_FREQ = "Law Enforcement";
         const STORAGE_KEY = 'dispatchDataV1';
-    const AUTH_HASH_KEY = 'dispatchAuthHashV1';
+    const AUTH_HASH_KEY = 'dispatchAuthHashV1'; // legacy single-hash
+    const AUTH_USERS_KEY = 'dispatchAuthUsersV1'; // array of {name, hash, role}
     const AUTH_SESSION_KEY = 'dispatchAuthedSessionV1';
+    const AUTH_SESSION_NAME = 'dispatchAuthedNameV1';
+    const AUTH_SESSION_ROLE = 'dispatchAuthedRoleV1';
+    const AUTH_ACCESS_LOG_KEY = 'dispatchAccessLogV1';
+    const ADMIN_PASSWORD = 'hola1234';
         
         // Colores y Etiquetas
         const typeColors = {
@@ -555,15 +594,79 @@
             if (!el) return;
             if (show) el.classList.remove('hidden'); else el.classList.add('hidden');
         }
+        function setWelcomeName(name){
+            try {
+                sessionStorage.setItem(AUTH_SESSION_NAME, name || '');
+                const el = document.getElementById('welcomeOwner');
+                if (el) {
+                    el.textContent = name ? `Sesión iniciada: ${name}` : '';
+                    el.classList.toggle('hidden', !name);
+                }
+            } catch(e){}
+        }
         function isSessionAuthed(){
             try { return sessionStorage.getItem(AUTH_SESSION_KEY) === '1'; } catch(e){ return false; }
         }
         function setSessionAuthed(val){
             try { sessionStorage.setItem(AUTH_SESSION_KEY, val ? '1' : '0'); } catch(e){}
         }
+        function setSessionRole(role){
+            try { sessionStorage.setItem(AUTH_SESSION_ROLE, role || ''); } catch(e){}
+        }
+        function getSessionRole(){
+            try { return sessionStorage.getItem(AUTH_SESSION_ROLE) || ''; } catch(e){ return ''; }
+        }
+        function getSessionName(){
+            try { return sessionStorage.getItem(AUTH_SESSION_NAME) || 'Admin'; } catch(e){ return 'Admin'; }
+        }
+        function isAdminSession(){ return getSessionRole() === 'admin'; }
+        function updateAdminUI(){
+            const btn = document.getElementById('adminBtn');
+            if (btn) btn.classList.toggle('hidden', !isAdminSession());
+        }
+        function getAccessLog(){
+            try {
+                const raw = localStorage.getItem(AUTH_ACCESS_LOG_KEY);
+                const arr = raw ? JSON.parse(raw) : [];
+                return Array.isArray(arr) ? arr : [];
+            } catch(e){ return []; }
+        }
+        function saveAccessLog(arr){
+            try { localStorage.setItem(AUTH_ACCESS_LOG_KEY, JSON.stringify(arr)); } catch(e){}
+        }
+        function logAccess(name, role){
+            const entry = { name: name || '', role: role || '', at: Date.now() };
+            const arr = getAccessLog();
+            arr.push(entry);
+            // keep last 500 entries to avoid unbounded growth
+            const trimmed = arr.slice(-500);
+            saveAccessLog(trimmed);
+        }
+        function getUsers(){
+            try {
+                const raw = localStorage.getItem(AUTH_USERS_KEY);
+                if (raw) {
+                    const arr = JSON.parse(raw);
+                    if (Array.isArray(arr)) return arr;
+                }
+                // migrate legacy single-hash if exists
+                const legacy = localStorage.getItem(AUTH_HASH_KEY);
+                if (legacy) {
+                    const migrated = [{ name: 'Usuario', hash: legacy, role: 'operator' }];
+                    localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(migrated));
+                    localStorage.removeItem(AUTH_HASH_KEY);
+                    return migrated;
+                }
+            } catch(e){}
+            return [];
+        }
+        function saveUsers(users){
+            try { localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(users)); } catch(e){}
+        }
         async function requireAuth(){
-            const storedHash = localStorage.getItem(AUTH_HASH_KEY);
+            let users = getUsers();
             const overlay = document.getElementById('authOverlay');
+            const ownerEl = document.getElementById('authOwnerName');
             const passEl = document.getElementById('authPassword');
             const pass2El = document.getElementById('authPasswordConfirm');
             const msgEl = document.getElementById('authModeMsg');
@@ -573,49 +676,47 @@
             if (!overlay || !passEl || !primaryBtn || !switchBtn) return;
 
             // If session already authed, skip
-            if (isSessionAuthed()) { showAuthOverlay(false); return; }
-
-            let mode = storedHash ? 'login' : 'setup';
-            function syncUI(){
-                if (mode === 'setup') {
-                    msgEl.textContent = 'Define una contraseña para proteger el acceso.';
-                    primaryBtn.textContent = 'Guardar y acceder';
-                    pass2El.classList.remove('hidden');
-                } else {
-                    msgEl.textContent = 'Ingresa tu contraseña para acceder.';
-                    primaryBtn.textContent = 'Ingresar';
-                    pass2El.classList.add('hidden');
-                }
-                errEl.textContent = '';
+            if (isSessionAuthed()) {
+                showAuthOverlay(false);
+                const storedName = sessionStorage.getItem(AUTH_SESSION_NAME) || '';
+                setWelcomeName(storedName);
+                updateAdminUI();
+                return;
             }
-            syncUI();
+
+            // Login-only mode. Admin password is literal.
+            msgEl.textContent = 'Ingresa tu contraseña para acceder (Admin: hola1234).';
+            primaryBtn.textContent = 'Ingresar';
+            ownerEl.classList.add('hidden');
+            pass2El.classList.add('hidden');
+            switchBtn.classList.add('hidden');
+            errEl.textContent = '';
             showAuthOverlay(true);
 
-            switchBtn.onclick = () => {
-                mode = (mode === 'setup') ? 'login' : 'setup';
-                syncUI();
-            };
             primaryBtn.onclick = async () => {
                 errEl.textContent = '';
                 const p1 = passEl.value.trim();
-                const p2 = pass2El.value.trim();
                 if (!p1) { errEl.textContent = 'Ingresa una contraseña.'; return; }
-                if (mode === 'setup') {
-                    if (p1.length < 4) { errEl.textContent = 'Usa al menos 4 caracteres.'; return; }
-                    if (p1 !== p2) { errEl.textContent = 'Las contraseñas no coinciden.'; return; }
-                    const h = await sha256Hex(p1);
-                    try { localStorage.setItem(AUTH_HASH_KEY, h); } catch(e){}
+                if (p1 === ADMIN_PASSWORD) {
                     setSessionAuthed(true);
+                    setSessionRole('admin');
+                    setWelcomeName('Admin');
                     showAuthOverlay(false);
+                    updateAdminUI();
+                    logAccess('Admin', 'admin');
                 } else {
                     const h = await sha256Hex(p1);
-                    if (h !== storedHash) { errEl.textContent = 'Contraseña incorrecta.'; return; }
+                    users = getUsers();
+                    const found = users.find(u => u.hash === h);
+                    if (!found) { errEl.textContent = 'Contraseña incorrecta.'; return; }
                     setSessionAuthed(true);
+                    setSessionRole(found.role === 'admin' ? 'admin' : 'operator');
+                    setWelcomeName(found.name || '');
                     showAuthOverlay(false);
+                    updateAdminUI();
+                    logAccess(found.name || 'Operador', getSessionRole());
                 }
-                // Limpia campos
                 passEl.value = '';
-                pass2El.value = '';
             };
         }
         const statusOptions = ["Código 14", "Código 7", "Código 6", "Codigo Rojo"];
@@ -679,6 +780,22 @@
                 return true;
             } catch (e) {
                 return false;
+            } finally {
+                isRestoring = false;
+            }
+        }
+
+        // Sync helper: hydrate and render without writing back to localStorage (avoid echo loops)
+        function syncFromStorage() {
+            try {
+                isRestoring = true; // prevent saveState during render
+                restoreState();
+                // Re-render main views
+                renderIncidents();
+                const panel = document.getElementById('historyPanel');
+                if (panel && !panel.classList.contains('hidden')) {
+                    renderHistory();
+                }
             } finally {
                 isRestoring = false;
             }
@@ -1119,6 +1236,7 @@
             }
 
             const now = new Date();
+            const actor = getSessionName();
             const newIncident = {
                 id: Date.now(),
                 title: newTitle,
@@ -1131,7 +1249,8 @@
                 endTime: null,
                 allUnits: [],
                 active: true,      // Incidente activo por defecto
-                codigo4: false     // No está en código 4 por defecto
+                codigo4: false,     // No está en código 4 por defecto
+                createdBy: actor
             };
 
             incidents.push(newIncident);
@@ -1146,7 +1265,8 @@
                 // mirror the used frequencies into the history entry
                 usedFrequencies: Array.isArray(newIncident.usedFrequencies) ? [...newIncident.usedFrequencies] : [newIncident.coordinationFrequency],
                 active: true,
-                codigo4: false
+                codigo4: false,
+                createdBy: actor
             });
 
             titleInput.value = '';
@@ -1174,6 +1294,8 @@
                 hist.units = [...incidentToDelete.assignedUnits];
                 hist.comments = [...incidentToDelete.comments];
                 hist.allUnits = [...incidentToDelete.allUnits];
+                // stamp actor closing the incident
+                try { hist.endedBy = getSessionName(); } catch(e){}
                 // Ensure usedFrequencies is recorded in history (fall back to coordinationFrequency)
                 hist.usedFrequencies = Array.isArray(incidentToDelete.usedFrequencies) && incidentToDelete.usedFrequencies.length > 0
                     ? [...incidentToDelete.usedFrequencies]
@@ -1197,6 +1319,7 @@
             }
 
             const now = new Date();
+            const actor = getSessionName();
             const newUnit = {
                 id: Date.now(),
                 name: newName.toUpperCase(),
@@ -1214,7 +1337,8 @@
             unitHistory.push({
                 ...newUnit,
                 startTime: now,
-                endTime: null
+                endTime: null,
+                createdBy: actor
             });
 
             nameInput.value = '';
@@ -1236,6 +1360,7 @@
             const hist = unitHistory.find(h => h.id === unitId && !h.endTime);
             if (hist) {
                 hist.endTime = new Date();
+                try { hist.endedBy = getSessionName(); } catch(e){}
             }
 
             renderIncidents();
@@ -1252,7 +1377,10 @@
 
             // Actualizar historial de unidades
             unitHistory.forEach(h => {
-                if (!h.endTime) h.endTime = new Date();
+                if (!h.endTime) {
+                    h.endTime = new Date();
+                    try { if (!h.endedBy) h.endedBy = getSessionName(); } catch(e){}
+                }
             });
 
             units = [];
@@ -1271,7 +1399,10 @@
 
             // Actualizar historial
             unitHistory.forEach(h => {
-                if (toDeleteIds.includes(h.id) && !h.endTime) h.endTime = new Date();
+                if (toDeleteIds.includes(h.id) && !h.endTime) {
+                    h.endTime = new Date();
+                    try { if (!h.endedBy) h.endedBy = getSessionName(); } catch(e){}
+                }
             });
 
             units = units.filter(u => u.type !== type);
@@ -1288,13 +1419,15 @@
         // Al agregar comentario a incidente, también lo agregas al historial
         function addComment(incidentId, commentText) {
             if (!commentText.trim()) return;
+            const actor = getSessionName();
+            const stamped = `${actor}: ${commentText}`;
             incidents = incidents.map(i => 
-                i.id === incidentId ? { ...i, comments: [...i.comments, commentText] } : i
+                i.id === incidentId ? { ...i, comments: [...i.comments, stamped] } : i
             );
             // Actualizar historial
             const hist = incidentHistory.find(h => h.id === incidentId && !h.endTime);
             if (hist) {
-                hist.comments.push(commentText);
+                hist.comments.push(stamped);
             }
             renderIncidents();
         }
@@ -1543,11 +1676,13 @@
                 doc.text(`Incidente: ${i.title}`, margin, y);
                 doc.setFont(undefined, 'normal');
                 y += lineHeight;
+                if (i.createdBy) { doc.text(`Creado por: ${i.createdBy}`, margin, y); y += lineHeight; }
                 doc.text(`Frecuencia: ${i.coordinationFrequency}`, margin, y);
                 y += lineHeight;
                 doc.text(`Inicio: ${i.startTime ? formatUTC(i.startTime) : ''}`, margin, y);
                 y += lineHeight;
                 doc.text(`Fin: ${i.endTime ? formatUTC(i.endTime) : 'En curso'}`, margin, y);
+                if (i.endTime && i.endedBy) { y += lineHeight; doc.text(`Cerrado por: ${i.endedBy}`, margin, y); }
                 y += lineHeight;
                 const participants = i.allUnits && i.allUnits.length
                     ? i.allUnits.map(uid => (unitHistory.find(unit => unit.id === uid) || units.find(unit => unit.id === uid) || {}).name).filter(Boolean).join(', ')
@@ -1592,12 +1727,52 @@
                     doc.text(`Inicio: ${u.startTime ? formatUTC(u.startTime) : ''}`, margin + 16, y);
                     y += lineHeight;
                     doc.text(`Fin: ${u.endTime ? formatUTC(u.endTime) : 'En servicio'}`, margin + 16, y);
+                    if (u.createdBy) { y += lineHeight; doc.text(`Registrado por: ${u.createdBy}`, margin + 16, y); }
+                    if (u.endTime && u.endedBy) { y += lineHeight; doc.text(`Eliminado por: ${u.endedBy}`, margin + 16, y); }
                     y += lineHeight;
                     doc.text(`Frecuencia: ${u.frequency}`, margin + 16, y);
                     y += lineHeight * 1.2;
                 });
                 y += lineHeight;
             });
+
+            // Operators who interacted
+            // Collect unique operator names from incidents (createdBy/endedBy/comments) and units (createdBy/endedBy)
+            const opSet = new Set();
+            try {
+                (incidentHistory || []).forEach(i => {
+                    if (i && i.createdBy) opSet.add(String(i.createdBy).trim());
+                    if (i && i.endedBy) opSet.add(String(i.endedBy).trim());
+                    if (i && Array.isArray(i.comments)) {
+                        i.comments.forEach(c => {
+                            const m = String(c || '').match(/^\s*([^:]+):\s/);
+                            if (m && m[1]) opSet.add(m[1].trim());
+                        });
+                    }
+                });
+            } catch(e){}
+            try {
+                (unitHistory || []).forEach(u => {
+                    if (u && u.createdBy) opSet.add(String(u.createdBy).trim());
+                    if (u && u.endedBy) opSet.add(String(u.endedBy).trim());
+                });
+            } catch(e){}
+            const operators = Array.from(opSet).filter(Boolean).sort((a,b)=> a.localeCompare(b, 'es', { sensitivity: 'base' }));
+            if (operators.length > 0) {
+                doc.addPage();
+                y = margin;
+                doc.setFontSize(12);
+                doc.setFont(undefined, 'bold');
+                doc.text('OPERADORES QUE INTERACTUARON', margin, y);
+                y += 18;
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'normal');
+                operators.forEach(name => {
+                    if (y > doc.internal.pageSize.height - margin) { doc.addPage(); y = margin; }
+                    doc.text(`- ${name}`, margin, y);
+                    y += lineHeight;
+                });
+            }
 
             // Save the PDF with timestamped filename
             const now = new Date();
@@ -1647,6 +1822,8 @@
             trySetLogo();
             // Require authentication overlay
             requireAuth();
+            // Ensure Admin button visibility reflects session
+            updateAdminUI();
         })();
 
         // Inicializar modo oscuro desde localStorage
@@ -1657,6 +1834,120 @@
             }
             applyDarkMode();
         })();
+
+        // --- Admin panel logic ---
+        function openAdminPanel(){
+            if (!isAdminSession()) { alert('Acceso restringido. Inicia sesión como Admin.'); return; }
+            renderOperatorList();
+            renderAccessLog();
+            const el = document.getElementById('adminOverlay');
+            if (el) el.classList.remove('hidden');
+        }
+        function closeAdminPanel(){
+            const el = document.getElementById('adminOverlay');
+            if (el) el.classList.add('hidden');
+        }
+        function sanitizeName(name){ return (name || '').replace(/\s+/g,' ').trim(); }
+        function escapeHtml(s){
+            return String(s || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+        async function adminCreateOperator(){
+            const nameEl = document.getElementById('adminNewName');
+            const passEl = document.getElementById('adminNewPass');
+            const errEl = document.getElementById('adminCreateError');
+            if (!nameEl || !passEl || !errEl) return;
+            errEl.textContent = '';
+            let name = sanitizeName(nameEl.value);
+            const pass = (passEl.value || '').trim();
+            if (!name) { errEl.textContent = 'Ingresa el nombre del operador.'; return; }
+            if (!pass || pass.length < 4) { errEl.textContent = 'La contraseña debe tener al menos 4 caracteres.'; return; }
+            if (pass === ADMIN_PASSWORD) { errEl.textContent = 'No uses la contraseña de administrador para operadores.'; return; }
+            const hash = await sha256Hex(pass);
+            const users = getUsers();
+            if (users.some(u => u.hash === hash)) { errEl.textContent = 'Ya existe un operador con esa contraseña.'; return; }
+            users.push({ name, hash, role: 'operator', pw: pass });
+            saveUsers(users);
+            nameEl.value = '';
+            passEl.value = '';
+            renderOperatorList();
+        }
+        function deleteOperator(hash){
+            if (!confirm('¿Eliminar este operador?')) return;
+            let users = getUsers();
+            users = users.filter(u => u.hash !== hash);
+            saveUsers(users);
+            renderOperatorList();
+        }
+        function renderOperatorList(){
+            const list = document.getElementById('operatorList');
+            if (!list) return;
+            const users = getUsers();
+            const operators = users.filter(u => (u.role || 'operator') !== 'admin');
+            if (operators.length === 0){
+                list.innerHTML = '<li class="text-gray-500">No hay operadores creados.</li>';
+                return;
+            }
+            list.innerHTML = operators.map(u => `
+                <li class="nature-glass rounded px-3 py-2">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <div class="font-medium text-gray-800">${escapeHtml(u.name)}</div>
+                            <div class="text-xs text-gray-600">Contraseña: <span class="font-mono">${escapeHtml(u.pw || 'no guardada')}</span></div>
+                        </div>
+                        <button onclick="deleteOperator('${u.hash}')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs h-7">Eliminar</button>
+                    </div>
+                </li>
+            `).join('');
+        }
+        function renderAccessLog(){
+            const list = document.getElementById('accessLogList');
+            if (!list) return;
+            const logs = getAccessLog().slice().sort((a,b)=> (b.at||0)-(a.at||0));
+            if (logs.length === 0){
+                list.innerHTML = '<li class="text-gray-500">Sin registros.</li>';
+                return;
+            }
+            function fmt(ts){ try { return new Date(ts).toLocaleString('es-ES'); } catch(e){ return String(ts); } }
+            list.innerHTML = logs.map(l => `
+                <li class="flex justify-between gap-3 px-2 py-1 bg-white/60 dark:bg-gray-800/60 rounded">
+                    <span><span class="font-medium">${escapeHtml(l.name||'')}</span> <span class="text-gray-500">(${escapeHtml(l.role||'')})</span></span>
+                    <span class="text-gray-600">${fmt(l.at)}</span>
+                </li>
+            `).join('');
+        }
+        function clearAccessLog(){ saveAccessLog([]); renderAccessLog(); }
+
+        // Cross-tab live sync: react to writes from other tabs/windows
+        window.addEventListener('storage', function(e){
+            try {
+                // Main app state changed in another tab
+                if (e.key === STORAGE_KEY) {
+                    syncFromStorage();
+                    return;
+                }
+                // Operators changed in another tab (admin panel section)
+                if (typeof AUTH_USERS_KEY !== 'undefined' && e.key === AUTH_USERS_KEY) {
+                    const adminOpen = document.getElementById('adminOverlay');
+                    if (adminOpen && !adminOpen.classList.contains('hidden')) {
+                        renderOperatorList();
+                    }
+                    return;
+                }
+                // Access log changed in another tab (admin panel section)
+                if (typeof AUTH_ACCESS_LOG_KEY !== 'undefined' && e.key === AUTH_ACCESS_LOG_KEY) {
+                    const adminOpen = document.getElementById('adminOverlay');
+                    if (adminOpen && !adminOpen.classList.contains('hidden')) {
+                        renderAccessLog();
+                    }
+                    return;
+                }
+            } catch(err) { /* ignore */ }
+        });
 
         // Cierra el menú solo si el clic es fuera del menú y del botón
         document.addEventListener('click', function(event) {
