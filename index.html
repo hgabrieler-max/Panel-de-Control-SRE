@@ -425,6 +425,18 @@
     const DISPATCH_UPDATED_AT = 'dispatchDataUpdatedAtV1';
     // Prevent pushing empty initial state to cloud before first pull completes
     let cloudReadyForStatePush = true;
+    // Optional default cloud config baked into the page so friends auto-connect without opening Admin.
+    // Fill these with your real Firebase values before publicar/hostear.
+    const CLOUD_DEFAULT = {
+        provider: 'firebase',
+        firebase: {
+            apiKey: 'PON_AQUI_TU_API_KEY',
+            authDomain: 'TU_PROYECTO.firebaseapp.com',
+            projectId: 'TU_PROYECTO'
+        },
+        docPath: 'dispatch/users',
+        statePath: 'dispatch/state'
+    };
         
         // Colores y Etiquetas
         const typeColors = {
@@ -726,14 +738,31 @@
         }
         // ---- Cloud sync (optional) ----
         function getCloudConfig(){
-            try { const raw = localStorage.getItem(CLOUD_CONFIG_KEY); return raw ? JSON.parse(raw) : {}; } catch(e){ return {}; }
+            try {
+                const raw = localStorage.getItem(CLOUD_CONFIG_KEY);
+                const saved = raw ? JSON.parse(raw) : {};
+                // If no saved provider but we have defaults filled, use defaults
+                if ((!saved || !saved.provider) && CLOUD_DEFAULT && CLOUD_DEFAULT.provider === 'firebase' && CLOUD_DEFAULT.firebase && CLOUD_DEFAULT.firebase.apiKey && CLOUD_DEFAULT.firebase.projectId) {
+                    return { ...CLOUD_DEFAULT };
+                }
+                // Merge saved with defaults to fill any missing fields
+                if (CLOUD_DEFAULT && CLOUD_DEFAULT.provider) {
+                    return {
+                        provider: saved.provider || CLOUD_DEFAULT.provider,
+                        firebase: saved.firebase || CLOUD_DEFAULT.firebase || null,
+                        docPath: saved.docPath || CLOUD_DEFAULT.docPath || 'dispatch/users',
+                        statePath: saved.statePath || CLOUD_DEFAULT.statePath || 'dispatch/state'
+                    };
+                }
+                return saved || {};
+            } catch(e){ return CLOUD_DEFAULT || {}; }
         }
         function setCloudConfig(cfg){
             try { localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cfg || {})); } catch(e){}
         }
         function isCloudEnabled(){
             const cfg = getCloudConfig();
-            return cfg && cfg.provider === 'firebase' && cfg.firebase && cfg.docPath;
+            return cfg && cfg.provider === 'firebase' && cfg.firebase && cfg.firebase.apiKey && cfg.firebase.projectId && cfg.docPath && cfg.statePath;
         }
         // Lazy load Firebase compat SDKs if needed
         let __firebaseLoading = null; let __firebaseInited = false;
