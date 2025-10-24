@@ -87,7 +87,8 @@
             content: '';
             position: absolute;
             inset: 0;
-            background-image: url('../Pictures/Screenshots/san_andreas_state_parks_logo.png');
+            /* Use CSS variable so JS can set a working path dynamically, with a default fallback */
+            background-image: var(--bg-logo-url, url('../Pictures/Screenshots/san_andreas_state_parks_logo.png'));
             background-repeat: no-repeat;
             background-position: center 30%;
             /* slightly larger and more visible */
@@ -196,13 +197,42 @@
 </head>
 <body class="nature-bg p-4 min-h-screen">
 
+    <!-- Simple auth overlay -->
+    <div id="authOverlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100000] hidden">
+        <div class="nature-glass rounded-lg p-5 w-full max-w-sm shadow-2xl border">
+            <h2 class="text-xl font-bold mb-3 text-green-900">Acceso</h2>
+            <p id="authModeMsg" class="text-sm text-gray-700 mb-3"></p>
+            <div class="space-y-2">
+                <input id="authOwnerName" type="text" class="border px-3 py-2 rounded w-full hidden" placeholder="Nombre del dueño (ej. Carlos)" />
+                <input id="authPassword" type="password" class="border px-3 py-2 rounded w-full" placeholder="Contraseña" />
+                <input id="authPasswordConfirm" type="password" class="border px-3 py-2 rounded w-full hidden" placeholder="Confirmar contraseña" />
+                <div class="flex gap-2 mt-2">
+                    <button id="authPrimaryBtn" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded font-semibold flex-1">Ingresar</button>
+                    <button id="authSwitchBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-2 rounded">Cambiar</button>
+                </div>
+                <p id="authError" class="text-sm text-red-600 mt-1"></p>
+            </div>
+        </div>
+    </div>
+
     <div class="flex items-center justify-between mb-4 nature-glass p-4 rounded-lg">
         <div class="flex items-center gap-4">
             <h1 class="text-3xl font-extrabold text-green-900">Panel de Control</h1>
         </div>
         <div class="flex items-center gap-2">
-            <button id="darkModeBtn" onclick="toggleDarkMode()" class="bg-gray-200 hover:bg-gray-300 text-sm px-2 py-1 rounded" aria-pressed="false" title="Toggle dark mode">
+            <button id="darkModeBtn" onclick="toggleDarkMode()" class="bg-gray-200 hover:bg-gray-300 text-sm px-2 py-1 rounded" aria-pressed="false" title="Alternar modo oscuro/luminoso">
                 <!-- Icono inicial será insertado por applyDarkMode() -->
+            </button>
+            <button 
+                id="clearDataBtn" 
+                onclick="clearAllData()" 
+                class="bg-red-600 hover:bg-red-700 text-white p-2 rounded-full flex items-center justify-center" 
+                aria-label="Reiniciar (borrar historial, unidades e incidentes)"
+                title="Reiniciar (borrar historial, unidades e incidentes)"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-5 w-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992m0 0V4.356m0 4.992L18.07 7.4A8.25 8.25 0 104.5 15.75" />
+                </svg>
             </button>
         </div>
     </div>
@@ -236,7 +266,7 @@
                 </div>
 
             <div class="mt-4">
-                <button onclick="if(confirm('Are you sure you want to delete ALL units?')) deleteAllUnits();" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-2 py-1 rounded text-xs">
+                <button onclick="deleteAllUnits();" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-2 py-1 rounded text-xs">
                     Eliminar todas las unidades
                 </button>
             </div>
@@ -310,6 +340,9 @@
     <script>
         // --- 1. DEFINICIONES GLOBALES ---
         const DEFAULT_FREQ = "Law Enforcement";
+        const STORAGE_KEY = 'dispatchDataV1';
+    const AUTH_HASH_KEY = 'dispatchAuthHashV1';
+    const AUTH_SESSION_KEY = 'dispatchAuthedSessionV1';
         
         // Colores y Etiquetas
         const typeColors = {
@@ -510,6 +543,81 @@
             localStorage.setItem('darkMode', darkMode ? '1' : '0');
             applyDarkMode();
         }
+        // --- Autenticación simple en cliente ---
+        async function sha256Hex(str){
+            const enc = new TextEncoder();
+            const data = enc.encode(str);
+            const digest = await crypto.subtle.digest('SHA-256', data);
+            return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('');
+        }
+        function showAuthOverlay(show){
+            const el = document.getElementById('authOverlay');
+            if (!el) return;
+            if (show) el.classList.remove('hidden'); else el.classList.add('hidden');
+        }
+        function isSessionAuthed(){
+            try { return sessionStorage.getItem(AUTH_SESSION_KEY) === '1'; } catch(e){ return false; }
+        }
+        function setSessionAuthed(val){
+            try { sessionStorage.setItem(AUTH_SESSION_KEY, val ? '1' : '0'); } catch(e){}
+        }
+        async function requireAuth(){
+            const storedHash = localStorage.getItem(AUTH_HASH_KEY);
+            const overlay = document.getElementById('authOverlay');
+            const passEl = document.getElementById('authPassword');
+            const pass2El = document.getElementById('authPasswordConfirm');
+            const msgEl = document.getElementById('authModeMsg');
+            const errEl = document.getElementById('authError');
+            const primaryBtn = document.getElementById('authPrimaryBtn');
+            const switchBtn = document.getElementById('authSwitchBtn');
+            if (!overlay || !passEl || !primaryBtn || !switchBtn) return;
+
+            // If session already authed, skip
+            if (isSessionAuthed()) { showAuthOverlay(false); return; }
+
+            let mode = storedHash ? 'login' : 'setup';
+            function syncUI(){
+                if (mode === 'setup') {
+                    msgEl.textContent = 'Define una contraseña para proteger el acceso.';
+                    primaryBtn.textContent = 'Guardar y acceder';
+                    pass2El.classList.remove('hidden');
+                } else {
+                    msgEl.textContent = 'Ingresa tu contraseña para acceder.';
+                    primaryBtn.textContent = 'Ingresar';
+                    pass2El.classList.add('hidden');
+                }
+                errEl.textContent = '';
+            }
+            syncUI();
+            showAuthOverlay(true);
+
+            switchBtn.onclick = () => {
+                mode = (mode === 'setup') ? 'login' : 'setup';
+                syncUI();
+            };
+            primaryBtn.onclick = async () => {
+                errEl.textContent = '';
+                const p1 = passEl.value.trim();
+                const p2 = pass2El.value.trim();
+                if (!p1) { errEl.textContent = 'Ingresa una contraseña.'; return; }
+                if (mode === 'setup') {
+                    if (p1.length < 4) { errEl.textContent = 'Usa al menos 4 caracteres.'; return; }
+                    if (p1 !== p2) { errEl.textContent = 'Las contraseñas no coinciden.'; return; }
+                    const h = await sha256Hex(p1);
+                    try { localStorage.setItem(AUTH_HASH_KEY, h); } catch(e){}
+                    setSessionAuthed(true);
+                    showAuthOverlay(false);
+                } else {
+                    const h = await sha256Hex(p1);
+                    if (h !== storedHash) { errEl.textContent = 'Contraseña incorrecta.'; return; }
+                    setSessionAuthed(true);
+                    showAuthOverlay(false);
+                }
+                // Limpia campos
+                passEl.value = '';
+                pass2El.value = '';
+            };
+        }
         const statusOptions = ["Código 14", "Código 7", "Código 6", "Codigo Rojo"];
 
         // --- 2. GESTIÓN DE ESTADO (DATOS) ---
@@ -521,6 +629,60 @@
         let unitHistory = [];
     // Track recently added units so we can animate them on render
     let recentlyAddedUnits = new Set();
+
+        // Borra historial, unidades e incidentes con confirmación y actualiza la vista
+        function clearAllData() {
+            const ok = confirm('¿Borrar historial, unidades e incidentes? Esta acción no se puede deshacer.');
+            if (!ok) return;
+            try {
+                incidents = [];
+                units = [];
+                incidentHistory = [];
+                unitHistory = [];
+                if (typeof saveState === 'function') saveState();
+            } finally {
+                // Re-render all
+                renderIncidents();
+                const panel = document.getElementById('historyPanel');
+                if (panel && !panel.classList.contains('hidden')) {
+                    renderHistory();
+                }
+            }
+        }
+
+        // Persistencia local de estado
+        let isRestoring = false;
+        function saveState() {
+            if (isRestoring) return;
+            try {
+                const data = {
+                    units,
+                    incidents,
+                    incidentHistory,
+                    unitHistory,
+                    expandedTypes
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            } catch (e) { /* ignore */ }
+        }
+        function restoreState() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) return false;
+                const data = JSON.parse(raw);
+                isRestoring = true;
+                units = Array.isArray(data.units) ? data.units : [];
+                incidents = Array.isArray(data.incidents) ? data.incidents : [];
+                incidentHistory = Array.isArray(data.incidentHistory) ? data.incidentHistory : [];
+                unitHistory = Array.isArray(data.unitHistory) ? data.unitHistory : [];
+                expandedTypes = (data && typeof data.expandedTypes === 'object' && data.expandedTypes) ? data.expandedTypes : {};
+                return true;
+            } catch (e) {
+                return false;
+            } finally {
+                isRestoring = false;
+            }
+        }
 
         // --- 3. FUNCIONES DE RENDERIZADO (DIBUJAR LA PANTALLA) ---
 
@@ -719,6 +881,8 @@
             }
 
             renderSummaries();
+            // Guardar el estado después de renderizar unidades y resúmenes
+            saveState();
         }
 
         // Reordena unitTypes intercambiando la posición de fromType y toType (swap) y persiste
@@ -772,6 +936,8 @@
                 // Desactivar la transición hasta la próxima interacción
                 list.style.transition = 'none';
                 list.removeEventListener('transitionend', handler);
+                // Persistir estado de expansión
+                saveState();
             });
         }
 
@@ -863,6 +1029,8 @@
                 container.appendChild(incidentElement);
             });
             renderUnits();
+            // Guardar también tras renderizar incidentes
+            saveState();
         }
 
         // Helpers para el menú plegable de estado de incidente
@@ -1039,6 +1207,9 @@
 
             units.push(newUnit);
 
+            // Marcar para animación de entrada
+            try { if (window && typeof recentlyAddedUnits !== 'undefined') { recentlyAddedUnits.add(newUnit.id); } } catch(e){}
+
             // Guardar en historial
             unitHistory.push({
                 ...newUnit,
@@ -1090,8 +1261,6 @@
 
         // Elimina unidades por tipo
         function deleteUnitsByType(type) {
-            if (!confirm(`¿Estás seguro de que deseas eliminar todas las unidades de tipo ${type}?`)) return;
-
             const toDeleteIds = units.filter(u => u.type === type).map(u => u.id);
 
             // Quitar de incidentes
@@ -1111,8 +1280,9 @@
 
         // Confirmación antes de borrar por tipo (botón discreto en header)
         function confirmDeleteUnitsByType(type) {
-            if (!confirm(`Eliminar todas las unidades de tipo ${type}? Esta acción no se puede deshacer.`)) return;
-            deleteUnitsByType(type);
+            if (confirm(`Eliminar todas las unidades de tipo ${type}? Esta acción no se puede deshacer.`)) {
+                deleteUnitsByType(type);
+            }
         }
 
         // Al agregar comentario a incidente, también lo agregas al historial
@@ -1429,22 +1599,55 @@
                 y += lineHeight;
             });
 
-            // Save the PDF
-            doc.save('historial_despacho.pdf');
+            // Save the PDF with timestamped filename
+            const now = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            const fname = `historial_despacho_${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}.pdf`;
+            doc.save(fname);
+
+            // Nota: la limpieza total ahora se realiza desde el botón "Limpiar" del encabezado.
         }
 
         // --- 5. INICIALIZACIÓN ---
-        
-        // Cargar algunas unidades e incidentes de prueba al inicio
-        function initializeData() {
-            units = [];
-            incidents = [];
+        // Try to locate the background logo dynamically and set CSS var
+        function trySetLogo() {
+            const candidates = [
+                './san_andreas_state_parks_logo.png',
+                './assets/san_andreas_state_parks_logo.png',
+                '../Pictures/Screenshots/san_andreas_state_parks_logo.png',
+                'file:///C:/Users/USER/Pictures/Screenshots/san_andreas_state_parks_logo.png',
+                'file:///E:/Pictures/Screenshots/san_andreas_state_parks_logo.png'
+            ];
+            function testNext(idx){
+                if (idx >= candidates.length) return;
+                const img = new Image();
+                img.onload = function(){
+                    try { document.documentElement.style.setProperty('--bg-logo-url', `url("${candidates[idx]}")`); } catch(e){}
+                };
+                img.onerror = function(){ testNext(idx+1); };
+                // prevent caching issues while testing
+                const sep = candidates[idx].includes('?') ? '&' : '?';
+                img.src = candidates[idx] + sep + 'cache=' + Date.now();
+            }
+            try { testNext(0); } catch(e){}
         }
-
-        // Llamada inicial para dibujar la interfaz al cargar la página
-        initializeData();
-        renderUnits();
-        renderIncidents(); 
+        // Restaurar datos desde localStorage si existen
+        (function initializeData(){
+            const restored = restoreState();
+            if (!restored) {
+                units = [];
+                incidents = [];
+                incidentHistory = [];
+                unitHistory = [];
+                expandedTypes = {};
+            }
+            renderUnits();
+            renderIncidents();
+            // Attempt to set the background logo path dynamically
+            trySetLogo();
+            // Require authentication overlay
+            requireAuth();
+        })();
 
         // Inicializar modo oscuro desde localStorage
         (function() {
