@@ -869,7 +869,7 @@
                 }
                 const m=document.getElementById('cloudMsg'); if(m) m.textContent='Estado sincronizado.';
                 try { cloudReadyForStatePush = true; } catch(e){}
-            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent='Error al sincronizar estado.'; }
+            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Error al sincronizar estado: ${(e && (e.message||e.code))||'desconocido'}`; try{ console.error('cloudPullState error:', e); }catch(_){} }
         }
         async function cloudPushState(){
             try {
@@ -878,7 +878,7 @@
                 const local = localRaw ? JSON.parse(localRaw) : {};
                 await cloudStateWrite(local);
                 const m=document.getElementById('cloudMsg'); if(m) m.textContent='Estado subido.';
-            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent='Error al subir estado.'; }
+            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Error al subir estado: ${(e && (e.message||e.code))||'desconocido'}`; try{ console.error('cloudPushState error:', e); }catch(_){} }
         }
         async function cloudStartStateSubscription(){
             try {
@@ -897,7 +897,7 @@
                     } catch(e){}
                 });
                 const m=document.getElementById('cloudMsg'); if(m) m.textContent='Suscripción de estado activada.';
-            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent='Error al suscribir estado.'; }
+            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Error al suscribir estado: ${(e && (e.message||e.code))||'desconocido'}`; try{ console.error('cloudStartStateSubscription error:', e); }catch(_){} }
         }
         async function syncUsersFromCloud(){
             if (!isCloudEnabled()) return;
@@ -956,7 +956,7 @@
                         try { cloudReadyForStatePush = true; } catch(e){}
                         const mm=document.getElementById('cloudMsg'); if(mm) mm.textContent='Conectado y sincronizado.';
                     }
-                } catch(err){ const mm=document.getElementById('cloudMsg'); if(mm) mm.textContent='No se pudo conectar a Firestore. Revisa reglas y ruta.'; }
+                } catch(err){ const mm=document.getElementById('cloudMsg'); if(mm) mm.textContent=`No se pudo conectar a Firestore: ${(err && (err.message||err.code))||'revisa reglas, config y rutas'}`; try{ console.error('saveCloudConfig connect error:', err); }catch(_){} }
             })();
         }
         async function cloudPullUsers(){
@@ -976,7 +976,7 @@
                     await cloudUsersWrite(localUsers);
                 }
                 const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Sincronización completada.`;
-            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent='Error al descargar.'; }
+            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Error al descargar: ${(e && (e.message||e.code))||'desconocido'}`; try{ console.error('cloudPullUsers error:', e); }catch(_){} }
         }
         async function cloudPushUsers(){
             try {
@@ -984,7 +984,7 @@
                 const users = getUsers();
                 await cloudUsersWrite(users);
                 const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Subidos ${users.length||0} operadores.`;
-            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent='Error al subir.'; }
+            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Error al subir: ${(e && (e.message||e.code))||'desconocido'}`; try{ console.error('cloudPushUsers error:', e); }catch(_){} }
         }
         async function cloudStartSubscription(){
             try {
@@ -1004,7 +1004,7 @@
                     } catch(e){}
                 });
                 const m=document.getElementById('cloudMsg'); if(m) m.textContent='Suscripción activada.';
-            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent='Error al suscribir.'; }
+            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Error al suscribir: ${(e && (e.message||e.code))||'desconocido'}`; try{ console.error('cloudStartSubscription error:', e); }catch(_){} }
         }
         function saveAccessLog(arr){
             try { localStorage.setItem(AUTH_ACCESS_LOG_KEY, JSON.stringify(arr)); } catch(e){}
