@@ -797,6 +797,16 @@
                 setCloudConfig({});
             }
             const m=document.getElementById('cloudMsg'); if(m) m.textContent='Configuración guardada.';
+            // Auto-start subscription and do an initial pull to verify connectivity
+            (async () => {
+                try {
+                    if (isCloudEnabled()) {
+                        await cloudStartSubscription();
+                        await cloudPullUsers();
+                        const mm=document.getElementById('cloudMsg'); if(mm) mm.textContent='Conectado y sincronizado.';
+                    }
+                } catch(err){ const mm=document.getElementById('cloudMsg'); if(mm) mm.textContent='No se pudo conectar a Firestore. Revisa reglas y ruta.'; }
+            })();
         }
         async function cloudPullUsers(){
             try {
@@ -2042,6 +2052,14 @@
             updateAdminUI();
             // Apply branding based on current session (none by default until login)
             applyDeptBranding();
+            // If cloud is configured, start a subscription and pull latest users so login works across devices
+            try {
+                if (isCloudEnabled()) {
+                    cloudStartSubscription();
+                    // Also do an initial pull to hydrate quickly
+                    cloudPullUsers();
+                }
+            } catch(e){}
         })();
 
         // Inicializar modo oscuro desde localStorage
