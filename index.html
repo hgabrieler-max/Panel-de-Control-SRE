@@ -251,13 +251,7 @@
             <div class="flex items-center gap-4 flex-wrap">
             <h1 class="text-3xl font-extrabold text-green-900">Panel de Control</h1>
             <p id="mensaje" class="text-sm text-gray-700">Cargando...</p>
-                <span id="roomBadge" class="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-800" title="Room actual y URL del archivo">Room: (init)</span>
-                <div class="flex items-center gap-2">
-                    <input id="roomInput" class="border px-2 py-1 rounded text-xs w-32" placeholder="Room" />
-                    <button id="roomChangeBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded text-xs">Cambiar</button>
-                    <button id="copyLinkBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded text-xs">Copiar link</button>
-                    <span id="syncStatus" class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700" title="Estado de sincronización">Sync: idle</span>
-                </div>
+                
         </div>
         <div class="flex items-center gap-3">
             <span id="welcomeOwner" class="text-sm text-gray-700 hidden"></span>
@@ -781,8 +775,6 @@
                     expandedTypes
                 };
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-                // Also push to Firebase (if available) for multi-user realtime sync
-                try { if (typeof window.firebaseSaveState === 'function') window.firebaseSaveState(data); } catch(e) { /* ignore */ }
             } catch (e) { /* ignore */ }
         }
         function restoreState() {
@@ -1304,6 +1296,15 @@
                         ? { ...u, status: "Código 14", frequency: DEFAULT_FREQ } 
                         : u
                 );
+                // push updates for affected units
+                try {
+                    if (window.firebaseUpsertUnit) {
+                        incidentToDelete.assignedUnits.forEach(uid => {
+                            const u = units.find(x => x.id === uid);
+                            if (u) window.firebaseUpsertUnit(u);
+                        });
+                    }
+                } catch(e){}
             }
 
             // Actualizar hora de fin en historial y registrar todas las unidades que participaron
@@ -1348,6 +1349,7 @@
             };
 
             units.push(newUnit);
+            try { if (window.firebaseUpsertUnit) window.firebaseUpsertUnit(newUnit); } catch(e){}
 
             // Marcar para animación de entrada
             try { if (window && typeof recentlyAddedUnits !== 'undefined') { recentlyAddedUnits.add(newUnit.id); } } catch(e){}
@@ -1367,6 +1369,7 @@
         // Al eliminar una unidad, actualiza la hora de fin en el historial
         function deleteUnit(unitId) {
             if (!confirm("¿Estás seguro de que deseas eliminar esta unidad?")) return;
+            try { if (window.firebaseRemoveUnit) window.firebaseRemoveUnit(unitId); } catch(e){}
             // Quitar la unidad de los incidentes
             incidents = incidents.map(i => ({
                 ...i,
@@ -1388,6 +1391,11 @@
         // Elimina todas las unidades
         function deleteAllUnits() {
             if (!confirm("¿Estás seguro de que deseas eliminar TODAS las unidades? Esto no se puede deshacer.")) return;
+            try {
+                if (Array.isArray(units) && window.firebaseRemoveUnit) {
+                    units.forEach(u => { try { window.firebaseRemoveUnit(u.id); } catch(e){} });
+                }
+            } catch(e){}
             // Quitar de incidentes
             incidents = incidents.map(i => ({
                 ...i,
@@ -1409,6 +1417,11 @@
         // Elimina unidades por tipo
         function deleteUnitsByType(type) {
             const toDeleteIds = units.filter(u => u.type === type).map(u => u.id);
+            try {
+                if (window.firebaseRemoveUnit) {
+                    toDeleteIds.forEach(id => { try { window.firebaseRemoveUnit(id); } catch(e){} });
+                }
+            } catch(e){}
 
             // Quitar de incidentes
             incidents = incidents.map(i => ({
@@ -1458,6 +1471,10 @@
             units = units.map(u => 
                 u.id === unitId ? { ...u, frequency: newFreq } : u
             );
+            try {
+                const u = units.find(x => x.id === unitId);
+                if (u && window.firebaseUpsertUnit) window.firebaseUpsertUnit(u);
+            } catch(e){}
             renderUnits();
         }
 
@@ -1465,6 +1482,10 @@
             units = units.map(u => 
                 u.id === unitId ? { ...u, status: newStatus } : u
             );
+            try {
+                const u = units.find(x => x.id === unitId);
+                if (u && window.firebaseUpsertUnit) window.firebaseUpsertUnit(u);
+            } catch(e){}
             renderUnits();
         }
 
@@ -1491,6 +1512,14 @@
                             ? { ...u, frequency: newFreq } // <--- CAMBIO AUTOMÁTICO DE FRECUENCIA
                             : u
                     );
+                    try {
+                        if (window.firebaseUpsertUnit) {
+                            i.assignedUnits.forEach(uid => {
+                                const u = units.find(x => x.id === uid);
+                                if (u) window.firebaseUpsertUnit(u);
+                            });
+                        }
+                    } catch(e){}
                 }
                 return i;
             });
@@ -1543,6 +1572,7 @@
 
             units = [...units];
             incidents = [...incidents];
+            try { if (window.firebaseUpsertUnit) window.firebaseUpsertUnit(unit); } catch(e){}
             renderIncidents();
         }
 
@@ -2138,7 +2168,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-analytics.js";
-        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+            import { getDatabase, ref, set, onValue, onChildAdded, onChildChanged, onChildRemoved, remove } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyC5-FxOU8Y1PfUUsghrHMXg_BTjUO38zzc",
@@ -2155,108 +2185,70 @@
   const analytics = getAnalytics(app);
 
   // 🔽 Conexión a la base de datos
-  const db = getDatabase(app);
+    const db = getDatabase(app);
 
-        // ========= Realtime sync for the app state (units/incidents/history) =========
-        // Room path: all clients connected to this room share the same state
-        // Room name can come from URL (?room=nombre), or localStorage, defaulting to 'default'
-        const _rawRoom = (new URLSearchParams(location.search).get('room') || localStorage.getItem('dispatchRoom') || 'default');
-        const roomName = String(_rawRoom).trim().replace(/[^\w\-]/g, '').slice(0, 40) || 'default';
-        try { localStorage.setItem('dispatchRoom', roomName); } catch(e){}
-        window.dispatchRoomName = roomName;
-        const ROOM_PATH = `rooms/${roomName}`;
-        const STATE_REF = ref(db, `${ROOM_PATH}/state`);
-
-        // Small helper to paint sync status in the header
-        function _setSyncStatus(text, tone = 'info') {
-            try {
-                const el = document.getElementById('syncStatus');
-                if (!el) return;
-                el.textContent = `Sync: ${text}`;
-                // tone: info/saving/ok/error
-                el.classList.remove('bg-gray-100','bg-blue-100','bg-green-100','bg-red-100','text-gray-700','text-blue-800','text-green-800','text-red-800');
-                if (tone === 'saving') el.classList.add('bg-blue-100','text-blue-800');
-                else if (tone === 'ok') el.classList.add('bg-green-100','text-green-800');
-                else if (tone === 'error') el.classList.add('bg-red-100','text-red-800');
-                else el.classList.add('bg-gray-100','text-gray-700');
-            } catch(e) { /* ignore */ }
-        }
-
-    // Identify this client to avoid echo loops
+    // Minimal realtime sync for UNITS only (granular, low-churn, no UI thrash)
+    // We use a fixed room path; adjust if needed later
+    const ROOM_PATH = 'rooms/default';
+    const UNITS_REF = ref(db, `${ROOM_PATH}/units`);
     const clientId = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Math.random()).slice(2);
 
-    // Simple debounce helper to avoid excessive writes
-    let _fbDebounceTimer;
-    const debounce = (fn, ms) => (...args) => {
-        clearTimeout(_fbDebounceTimer);
-        _fbDebounceTimer = setTimeout(() => fn(...args), ms);
+    // Expose helpers to the non-module script
+    window.firebaseUpsertUnit = async function(unit){
+        try {
+            const u = { ...unit, _by: clientId, _ts: Date.now() };
+            await set(ref(db, `${ROOM_PATH}/units/${unit.id}`), u);
+        } catch(e){ console.warn('Unit upsert failed', e); }
+    };
+    window.firebaseRemoveUnit = async function(unitId){
+        try { await remove(ref(db, `${ROOM_PATH}/units/${unitId}`)); } catch(e){ console.warn('Unit remove failed', e); }
     };
 
-    // Expose a global function so the main script can push state to Firebase
-        window.firebaseSaveState = debounce(async (data) => {
-        // Avoid writing while applying a remote snapshot
-        if (window._firebaseIsApplying) return;
+    function applyRemoteUnit(remote){
+        if (!remote || typeof remote !== 'object') return false;
+        // skip own writes to avoid echo-closed selects
+        if (remote._by && remote._by === clientId) return false;
+        const { _by, _ts, ...pure } = remote;
         try {
-                _setSyncStatus('saving…', 'saving');
-                console.debug('[SYNC] Saving state to', `${ROOM_PATH}/state`, { by: clientId, at: new Date().toISOString() });
-                await set(STATE_REF, {
-                ...data,
-                _meta: { updatedAt: Date.now(), by: clientId }
-            });
-                _setSyncStatus('saved', 'ok');
-        } catch (e) {
-            console.warn('Firebase save failed', e);
-                _setSyncStatus('error on save', 'error');
-        }
-    }, 150);
+            // update local units array
+            const idx = Array.isArray(window.units) ? window.units.findIndex(x => x && x.id === pure.id) : -1;
+            if (idx === -1) {
+                window.units = [...(window.units || []), pure];
+            } else {
+                const next = window.units.slice();
+                next[idx] = { ...next[idx], ...pure };
+                window.units = next;
+            }
+            if (typeof window.renderUnits === 'function') window.renderUnits();
+            if (typeof window.saveState === 'function') window.saveState();
+            return true;
+        } catch(e){ return false; }
+    }
 
-    // Listen for remote state updates
-        onValue(STATE_REF, (snapshot) => {
-        const payload = snapshot.val();
-        if (!payload || typeof payload !== 'object') return;
-        // If the last writer was this same client, skip to prevent feedback
-        if (payload._meta && payload._meta.by === clientId) return;
+    function removeRemoteUnit(unitId){
+        try {
+            if (!Array.isArray(window.units)) return false;
+            const before = window.units.length;
+            window.units = window.units.filter(u => u && u.id !== unitId);
+            if (window.units.length !== before) {
+                if (typeof window.renderUnits === 'function') window.renderUnits();
+                if (typeof window.saveState === 'function') window.saveState();
+                return true;
+            }
+            return false;
+        } catch(e){ return false; }
+    }
 
-        const rUnits = Array.isArray(payload.units) ? payload.units : [];
-        const rIncidents = Array.isArray(payload.incidents) ? payload.incidents : [];
-        const rIncidentHistory = Array.isArray(payload.incidentHistory) ? payload.incidentHistory : [];
-        const rUnitHistory = Array.isArray(payload.unitHistory) ? payload.unitHistory : [];
-        const rExpanded = (payload.expandedTypes && typeof payload.expandedTypes === 'object') ? payload.expandedTypes : {};
-
-            try {
-            window._firebaseIsApplying = true;
-            if (typeof window.isRestoring !== 'undefined') window.isRestoring = true;
-                const from = (payload && payload._meta && payload._meta.by) ? String(payload._meta.by).slice(0,8) : 'remote';
-                const when = (payload && payload._meta && payload._meta.updatedAt) ? new Date(payload._meta.updatedAt).toLocaleTimeString() : '';
-                console.debug('[SYNC] Received state from room', roomName, 'by', from, 'at', when);
-
-            // Apply remote state to the global app variables defined in the main script
-            window.units = rUnits;
-            window.incidents = rIncidents;
-            window.incidentHistory = rIncidentHistory;
-            window.unitHistory = rUnitHistory;
-            window.expandedTypes = rExpanded;
-
-            // Cache to localStorage for offline/refresh continuity
-            try {
-                const cache = {
-                    units: rUnits,
-                    incidents: rIncidents,
-                    incidentHistory: rIncidentHistory,
-                    unitHistory: rUnitHistory,
-                    expandedTypes: rExpanded
-                };
-                localStorage.setItem(window.STORAGE_KEY, JSON.stringify(cache));
-            } catch (e) { /* ignore */ }
-
-                    // Re-render UI
-            try { if (typeof window.renderIncidents === 'function') window.renderIncidents(); } catch(e) { /* ignore */ }
-            try { if (typeof window.renderUnits === 'function') window.renderUnits(); } catch(e) { /* ignore */ }
-                    _setSyncStatus(`recv ${when || ''}`, 'ok');
-        } finally {
-            if (typeof window.isRestoring !== 'undefined') window.isRestoring = false;
-            window._firebaseIsApplying = false;
-        }
+    onChildAdded(UNITS_REF, (snap) => {
+        const val = snap.val();
+        applyRemoteUnit(val);
+    });
+    onChildChanged(UNITS_REF, (snap) => {
+        const val = snap.val();
+        applyRemoteUnit(val);
+    });
+    onChildRemoved(UNITS_REF, (snap) => {
+        removeRemoteUnit(snap.key);
     });
 
     // 🔽 Escuchar cambios en tiempo real en "prueba/"
@@ -2281,44 +2273,5 @@
   set(ref(db, "prueba/"), {
     mensaje: "Bienvenido a tu panel"
   });
-
-    // UI: mostrar room y la URL del archivo para inspección rápida
-    try {
-        const badge = document.getElementById('roomBadge');
-        if (badge) {
-            badge.textContent = `Room: ${roomName}`;
-            badge.title = `Room: ${roomName}\nURL: ${window.location.href}`;
-        }
-            const input = document.getElementById('roomInput');
-            const changeBtn = document.getElementById('roomChangeBtn');
-            const copyBtn = document.getElementById('copyLinkBtn');
-            if (input) input.value = roomName;
-            const applyRoom = () => {
-                const next = String((input && input.value) || '')
-                    .trim()
-                    .replace(/[^\w\-]/g, '')
-                    .slice(0, 40) || 'default';
-                try { localStorage.setItem('dispatchRoom', next); } catch(e){}
-                const url = new URL(window.location.href);
-                url.searchParams.set('room', next);
-                // Also add a simple cache-buster to mitigate CDN/browser cache when sharing
-                url.searchParams.set('v', String(Date.now()).slice(-6));
-                window.location.href = url.toString();
-            };
-            if (changeBtn) changeBtn.addEventListener('click', applyRoom);
-            if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyRoom(); });
-            if (copyBtn) {
-                copyBtn.addEventListener('click', async () => {
-                    try {
-                        await navigator.clipboard.writeText(window.location.href);
-                        const old = copyBtn.textContent;
-                        copyBtn.textContent = 'Copiado';
-                        setTimeout(() => { copyBtn.textContent = old || 'Copiar link'; }, 1200);
-                    } catch (e) {
-                        // ignore
-                    }
-                });
-            }
-    } catch (e) { /* ignore */ }
 </script>
 </html>
