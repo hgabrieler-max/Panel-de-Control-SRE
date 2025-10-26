@@ -2126,32 +2126,29 @@
     </script>
 </body>
 <script type="module">
-  // Importar SDKs de Firebase
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-analytics.js";
-  import { getDatabase, ref, set, onValue, push } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+  import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
-  // Configuración de tu app
   const firebaseConfig = {
-    apiKey: "AIzaSyC5-FxOU8Y1PFuUgshrHMXg_BTjU038zzc",
+    apiKey: "AIzaSyC5-FxOU8Y1PfUUsghrHMXg_BTjUO38zzc",
     authDomain: "dispatch-132ba.firebaseapp.com",
-    databaseURL: "https://dispatch-132ba-default-rtdb.firebaseio.com/",
     projectId: "dispatch-132ba",
     storageBucket: "dispatch-132ba.appspot.com",
     messagingSenderId: "824655764897",
     appId: "1:824655764897:web:8ca4db278fb1286c0d3fe0",
-    measurementId: "G-X5FTEVFEH0"
+    measurementId: "G-KSFTFEVFHE"
   };
 
-  // Inicializar Firebase
   const app = initializeApp(firebaseConfig);
   const analytics = getAnalytics(app);
+
+  // 🔽 Conexión a la base de datos
   const db = getDatabase(app);
 
-  // Prueba de conexión
+  // 🔽 Escribir un ejemplo de dato (opcional)
   set(ref(db, "prueba/"), {
-    mensaje: "Conectado correctamente a Firebase 😎",
-    hora: new Date().toLocaleTimeString()
+    mensaje: "Hola desde tu panel"
   });
 </script>
 </html>
