@@ -774,6 +774,8 @@
                     expandedTypes
                 };
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                // Also push to Firebase (if available) for multi-user realtime sync
+                try { if (typeof window.firebaseSaveState === 'function') window.firebaseSaveState(data); } catch(e) { /* ignore */ }
             } catch (e) { /* ignore */ }
         }
         function restoreState() {
@@ -2129,7 +2131,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-analytics.js";
-    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyC5-FxOU8Y1PfUUsghrHMXg_BTjUO38zzc",
@@ -2146,6 +2148,80 @@
 
   // 🔽 Conexión a la base de datos
   const db = getDatabase(app);
+
+    // ========= Realtime sync for the app state (units/incidents/history) =========
+    // Room path: all clients connected to this room share the same state
+    const ROOM_PATH = 'rooms/default';
+    const STATE_REF = ref(db, `${ROOM_PATH}/state`);
+
+    // Identify this client to avoid echo loops
+    const clientId = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Math.random()).slice(2);
+
+    // Simple debounce helper to avoid excessive writes
+    let _fbDebounceTimer;
+    const debounce = (fn, ms) => (...args) => {
+        clearTimeout(_fbDebounceTimer);
+        _fbDebounceTimer = setTimeout(() => fn(...args), ms);
+    };
+
+    // Expose a global function so the main script can push state to Firebase
+    window.firebaseSaveState = debounce((data) => {
+        // Avoid writing while applying a remote snapshot
+        if (window._firebaseIsApplying) return;
+        try {
+            set(STATE_REF, {
+                ...data,
+                _meta: { updatedAt: Date.now(), by: clientId }
+            });
+        } catch (e) {
+            console.warn('Firebase save failed', e);
+        }
+    }, 150);
+
+    // Listen for remote state updates
+    onValue(STATE_REF, (snapshot) => {
+        const payload = snapshot.val();
+        if (!payload || typeof payload !== 'object') return;
+        // If the last writer was this same client, skip to prevent feedback
+        if (payload._meta && payload._meta.by === clientId) return;
+
+        const rUnits = Array.isArray(payload.units) ? payload.units : [];
+        const rIncidents = Array.isArray(payload.incidents) ? payload.incidents : [];
+        const rIncidentHistory = Array.isArray(payload.incidentHistory) ? payload.incidentHistory : [];
+        const rUnitHistory = Array.isArray(payload.unitHistory) ? payload.unitHistory : [];
+        const rExpanded = (payload.expandedTypes && typeof payload.expandedTypes === 'object') ? payload.expandedTypes : {};
+
+        try {
+            window._firebaseIsApplying = true;
+            if (typeof window.isRestoring !== 'undefined') window.isRestoring = true;
+
+            // Apply remote state to the global app variables defined in the main script
+            window.units = rUnits;
+            window.incidents = rIncidents;
+            window.incidentHistory = rIncidentHistory;
+            window.unitHistory = rUnitHistory;
+            window.expandedTypes = rExpanded;
+
+            // Cache to localStorage for offline/refresh continuity
+            try {
+                const cache = {
+                    units: rUnits,
+                    incidents: rIncidents,
+                    incidentHistory: rIncidentHistory,
+                    unitHistory: rUnitHistory,
+                    expandedTypes: rExpanded
+                };
+                localStorage.setItem(window.STORAGE_KEY, JSON.stringify(cache));
+            } catch (e) { /* ignore */ }
+
+            // Re-render UI
+            try { if (typeof window.renderIncidents === 'function') window.renderIncidents(); } catch(e) { /* ignore */ }
+            try { if (typeof window.renderUnits === 'function') window.renderUnits(); } catch(e) { /* ignore */ }
+        } finally {
+            if (typeof window.isRestoring !== 'undefined') window.isRestoring = false;
+            window._firebaseIsApplying = false;
+        }
+    });
 
     // 🔽 Escuchar cambios en tiempo real en "prueba/"
     const referencia = ref(db, "prueba/");
