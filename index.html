@@ -88,7 +88,7 @@
             position: absolute;
             inset: 0;
             /* Use CSS variable so JS can set a working path dynamically, with a default fallback */
-            background-image: var(--bg-logo-url);
+            background-image: var(--bg-logo-url, url('../Pictures/Screenshots/san_andreas_state_parks_logo.png'));
             background-repeat: no-repeat;
             background-position: center 30%;
             /* slightly larger and more visible */
@@ -225,14 +225,9 @@
             <div class="space-y-3">
                 <div>
                     <h3 class="font-semibold mb-2 text-gray-800">Crear nuevo operador</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
                         <input id="adminNewName" type="text" class="border px-3 py-2 rounded w-full md:col-span-1" placeholder="Nombre" />
                         <input id="adminNewPass" type="password" class="border px-3 py-2 rounded w-full md:col-span-1" placeholder="Contraseña" />
-                        <select id="adminNewDept" class="border px-3 py-2 rounded w-full md:col-span-1">
-                            <option value="SAFW" selected>SAFW</option>
-                            <option value="SAPR">SAPR</option>
-                            <option value="LSPD">LSPD</option>
-                        </select>
                         <button onclick="adminCreateOperator()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded font-semibold md:col-span-1">Crear</button>
                     </div>
                     <p id="adminCreateError" class="text-sm text-red-600 mt-1"></p>
@@ -247,44 +242,6 @@
                         <button onclick="clearAccessLog()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded text-xs">Limpiar</button>
                     </div>
                     <ul id="accessLogList" class="space-y-1 text-xs max-h-56 overflow-y-auto"></ul>
-                </div>
-                <div>
-                    <div class="flex items-center justify-between mb-2">
-                        <h3 class="font-semibold text-gray-800">Sincronización en la nube</h3>
-                    </div>
-                    <div class="space-y-2 text-xs">
-                        <label class="block text-gray-700">Proveedor:</label>
-                        <select id="cloudProvider" class="border rounded px-2 py-1 w-full">
-                            <option value="">Desactivado</option>
-                            <option value="firebase">Firebase (Firestore)</option>
-                        </select>
-                        <label class="block text-gray-700 mt-2">Config Firebase (JSON):</label>
-                        <textarea id="cloudFirebaseJson" class="border rounded px-2 py-1 w-full h-24" placeholder='{"apiKey":"...","authDomain":"...","projectId":"..."}'></textarea>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
-                            <div>
-                                <label class="block text-gray-700">Ruta de operadores (Firestore):</label>
-                                <input id="cloudDocPath" type="text" class="border rounded px-2 py-1 w-full" placeholder="dispatch/users" />
-                                <div class="flex flex-wrap gap-2 mt-2">
-                                    <button onclick="cloudPullUsers()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded">Bajar operadores</button>
-                                    <button onclick="cloudPushUsers()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded">Subir operadores</button>
-                                    <button onclick="cloudStartSubscription()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded">Suscribir operadores</button>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-gray-700">Ruta de estado (Firestore):</label>
-                                <input id="cloudStatePath" type="text" class="border rounded px-2 py-1 w-full" placeholder="dispatch/state" />
-                                <div class="flex flex-wrap gap-2 mt-2">
-                                    <button onclick="cloudPullState()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded">Bajar estado</button>
-                                    <button onclick="cloudPushState()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded">Subir estado</button>
-                                    <button onclick="cloudStartStateSubscription()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded">Suscribir estado</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="flex flex-wrap gap-2 mt-3">
-                            <button onclick="saveCloudConfig()" class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded">Guardar config</button>
-                        </div>
-                        <p id="cloudMsg" class="text-[11px] text-gray-600 mt-1"></p>
-                    </div>
                 </div>
             </div>
         </div>
@@ -328,7 +285,13 @@
                     onkeydown="if(event.key === 'Enter') { addUnit(); }"
                 >
                 <select id="newUnitType" class="border rounded px-2 py-1">
-                    <!-- options will be populated dynamically by populateUnitTypeOptions() -->
+                    <option value="Warden">SAFW</option>
+                    <option value="Ranger">SAPR</option>
+                    <option value="AIR">AIR</option>
+                    <option value="TSU">SP</option>
+                    <option value="ISB">ISB</option>
+                    <option value="LG">LG</option>
+                    <option value="CHP">CHP</option>
                 </select>
                 <button onclick="addUnit()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded font-semibold">Agregar</button>
             </div>
@@ -419,28 +382,7 @@
     const AUTH_SESSION_ROLE = 'dispatchAuthedRoleV1';
     const AUTH_ACCESS_LOG_KEY = 'dispatchAccessLogV1';
     const ADMIN_PASSWORD = 'hola1234';
-    const AUTH_SESSION_DEPT = 'dispatchAuthedDeptV1'; // 'SAFW' | 'SAPR' | 'LSPD'
-    const CLOUD_CONFIG_KEY = 'dispatchCloudConfigV1'; // { provider:'firebase', firebase:{...}, docPath:'dispatch/users', statePath:'dispatch/state' }
-    const AUTH_USERS_UPDATED_AT = 'dispatchAuthUsersUpdatedAtV1';
-    const DISPATCH_UPDATED_AT = 'dispatchDataUpdatedAtV1';
-    // Prevent pushing empty initial state to cloud before first pull completes
-    let cloudReadyForStatePush = true;
-    // Optional default cloud config baked into the page so friends auto-connect without opening Admin.
-    // Fill these with your real Firebase values before publicar/hostear.
-    const CLOUD_DEFAULT = {
-        provider: 'firebase',
-        firebase: {
-            apiKey: 'AIzaSyC5-FxOU8YlPFuUGshrHMXg_BTjUO38zzc',
-            authDomain: 'dispatch-132ba.firebaseapp.com',
-            projectId: 'dispatch-132ba',
-            storageBucket: 'dispatch-132ba.firebasestorage.app',
-            messagingSenderId: '824655764897',
-            appId: '1:824655764897:web:e022183aaa510fc80d3fe0',
-            measurementId: 'G-JM14DCGNJR'
-        },
-        docPath: 'dispatch/users',
-        statePath: 'dispatch/state'
-    };
+    const UNIVERSAL_PASSWORD = 'SRE';
         
         // Colores y Etiquetas
         const typeColors = {
@@ -451,12 +393,7 @@
             LG: "bg-cyan-700/60 text-white",
             AIR: "bg-gray-700/60 text-white",
             ISB: "bg-indigo-700/60 text-white",
-            CHP: "bg-amber-700/60 text-white",
-            // LSPD domain types
-            LSPD: "bg-blue-900/70 text-white",
-            SWAT: "bg-gray-900/80 text-white",
-            TD: "bg-amber-600/70 text-white",
-            AU: "bg-sky-800/70 text-white"
+            CHP: "bg-amber-700/60 text-white"
         };
         // Clases para la barra de cada tipo (fondo y texto)
         const typeBarClasses = {
@@ -466,12 +403,7 @@
             LG: 'bg-cyan-50/60 text-cyan-800',
             AIR: 'bg-gray-100/60 text-gray-800',
             ISB: 'bg-blue-50/60 text-blue-800',
-            CHP: 'bg-amber-100/60 text-amber-800',
-            // LSPD domain types
-            LSPD: 'bg-blue-50/60 text-blue-900',
-            SWAT: 'bg-gray-100/60 text-gray-800',
-            TD: 'bg-amber-50/60 text-amber-800',
-            AU: 'bg-sky-50/60 text-sky-900'
+            CHP: 'bg-amber-100/60 text-amber-800'
         };
         const statusColors = {
             // Light / Dark variants so colors remain visible in both themes
@@ -550,7 +482,6 @@
     }
 
     const defaultUnitTypes = ["Warden", "Ranger", "AIR", "TSU", "ISB", "LG", "CHP"];
-    const LSPD_TYPES = ["LSPD", "SWAT", "TD", "AU"]; // visible only for LSPD sessions
     // Persistible order of unit types. Load from localStorage or use default order.
     function loadUnitTypes() {
         try {
@@ -573,8 +504,6 @@
         try { localStorage.setItem('unitTypesOrder', JSON.stringify(arr)); } catch(e){}
     }
     let unitTypes = loadUnitTypes();
-    function isLSPDSession(){ return (getSessionDept() || '').toUpperCase() === 'LSPD'; }
-    function getVisibleUnitTypes(){ return isLSPDSession() ? [...LSPD_TYPES] : [...unitTypes]; }
     // Mapa de nombres de despliegue para las categorías (nombres completos) y abreviaturas para las etiquetas
     const typeDisplayFull = {
         Warden: 'S.A Fish And Wildlife',
@@ -583,12 +512,7 @@
         ISB: 'Investigative Service Branch',
         TSU: 'State Patrol Branch',
         LG: 'S.A. Lifeguard',
-        CHP: 'Commission of Highway Patrol',
-        // LSPD domain
-        LSPD: 'L.S. Police Department',
-        SWAT: 'Special Weapons And Tactics',
-        TD: 'Traffic Division',
-        AU: 'Aviation Unit'
+        CHP: 'Commission of Highway Patrol'
     };
     const typeAbbrev = {
         Warden: 'SAFW',
@@ -597,12 +521,7 @@
         ISB: 'ISB',
         TSU: 'SP',
         LG: 'LG',
-        CHP: 'CHP',
-        // LSPD domain
-        LSPD: 'LSPD',
-        SWAT: 'SWAT',
-        TD: 'TD',
-        AU: 'AU'
+        CHP: 'CHP'
     };
     // Estado de expansión por tipo (true = abierto)
     let expandedTypes = {};
@@ -664,12 +583,6 @@
             localStorage.setItem('darkMode', darkMode ? '1' : '0');
             applyDarkMode();
         }
-        function populateUnitTypeOptions(){
-            const sel = document.getElementById('newUnitType');
-            if (!sel) return;
-            const types = getVisibleUnitTypes();
-            sel.innerHTML = types.map(t => `<option value="${t}">${typeAbbrev[t] || t}</option>`).join('');
-        }
         // --- Autenticación simple en cliente ---
         async function sha256Hex(str){
             const enc = new TextEncoder();
@@ -707,27 +620,6 @@
         function getSessionName(){
             try { return sessionStorage.getItem(AUTH_SESSION_NAME) || 'Admin'; } catch(e){ return 'Admin'; }
         }
-        function setSessionDept(dept){
-            try { sessionStorage.setItem(AUTH_SESSION_DEPT, dept || ''); } catch(e){}
-        }
-        function getSessionDept(){
-            try { return sessionStorage.getItem(AUTH_SESSION_DEPT) || ''; } catch(e){ return ''; }
-        }
-        function isSAPRSession(){ return (getSessionDept() || '').toUpperCase() === 'SAPR'; }
-        function applyDeptBranding(){
-            try {
-                if (isSAPRSession()) {
-                    // Ensure a valid logo is set
-                    trySetLogo();
-                } else {
-                    // Disable background logo
-                    document.documentElement.style.setProperty('--bg-logo-url', 'none');
-                }
-                // Refresh unit type options and views based on department
-                populateUnitTypeOptions();
-                try { renderUnits(); renderIncidents(); } catch(e){}
-            } catch(e){}
-        }
         function isAdminSession(){ return getSessionRole() === 'admin'; }
         function updateAdminUI(){
             const btn = document.getElementById('adminBtn');
@@ -739,279 +631,6 @@
                 const arr = raw ? JSON.parse(raw) : [];
                 return Array.isArray(arr) ? arr : [];
             } catch(e){ return []; }
-        }
-        // ---- Cloud sync (optional) ----
-        function getCloudConfig(){
-            try {
-                const raw = localStorage.getItem(CLOUD_CONFIG_KEY);
-                const saved = raw ? JSON.parse(raw) : {};
-                // If no saved provider but we have defaults filled, use defaults
-                if ((!saved || !saved.provider) && CLOUD_DEFAULT && CLOUD_DEFAULT.provider === 'firebase' && CLOUD_DEFAULT.firebase && CLOUD_DEFAULT.firebase.apiKey && CLOUD_DEFAULT.firebase.projectId) {
-                    return { ...CLOUD_DEFAULT };
-                }
-                // Merge saved with defaults to fill any missing fields
-                if (CLOUD_DEFAULT && CLOUD_DEFAULT.provider) {
-                    return {
-                        provider: saved.provider || CLOUD_DEFAULT.provider,
-                        firebase: saved.firebase || CLOUD_DEFAULT.firebase || null,
-                        docPath: saved.docPath || CLOUD_DEFAULT.docPath || 'dispatch/users',
-                        statePath: saved.statePath || CLOUD_DEFAULT.statePath || 'dispatch/state'
-                    };
-                }
-                return saved || {};
-            } catch(e){ return CLOUD_DEFAULT || {}; }
-        }
-        function setCloudConfig(cfg){
-            try { localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cfg || {})); } catch(e){}
-        }
-        function isCloudEnabled(){
-            const cfg = getCloudConfig();
-            return cfg && cfg.provider === 'firebase' && cfg.firebase && cfg.firebase.apiKey && cfg.firebase.projectId && cfg.docPath && cfg.statePath;
-        }
-        // Lazy load Firebase compat SDKs if needed (app, auth, firestore) and ensure anonymous auth
-        let __firebaseLoading = null; let __firebaseInited = false;
-        async function ensureFirebase(){
-            // If already loaded and initialized, still ensure we're signed in anonymously
-            if (window.firebase && window.firebase.firestore) {
-                try { if (window.firebase.auth && !window.firebase.auth().currentUser) { await window.firebase.auth().signInAnonymously(); } } catch(e){}
-                return true;
-            }
-            if (!__firebaseLoading) {
-                __firebaseLoading = new Promise((resolve,reject)=>{
-                    function add(src){
-                        return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=()=>res(); s.onerror=rej; document.head.appendChild(s); });
-                    }
-                    add('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js')
-                        .then(()=> add('https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js'))
-                        .then(()=> add('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js'))
-                        .then(()=> resolve(true)).catch(reject);
-                });
-            }
-            await __firebaseLoading;
-            const cfg = getCloudConfig();
-            if (!__firebaseInited && cfg && cfg.firebase) {
-                try { window.firebase.initializeApp(cfg.firebase); __firebaseInited = true; } catch(e){ /* already initialized */ __firebaseInited = true; }
-            }
-            // Ensure we have an auth user so rules with request.auth != null pass
-            try { if (window.firebase.auth && !window.firebase.auth().currentUser) { await window.firebase.auth().signInAnonymously(); } } catch(e){}
-            return true;
-        }
-        function getUsersDocRef(){
-            const cfg = getCloudConfig();
-            if (!cfg || !cfg.docPath) return null;
-            const db = window.firebase.firestore();
-            return db.doc(cfg.docPath);
-        }
-        function getStateDocRef(){
-            const cfg = getCloudConfig();
-            const path = (cfg && (cfg.statePath || 'dispatch/state'));
-            if (!path) return null;
-            const db = window.firebase.firestore();
-            return db.doc(path);
-        }
-        async function cloudUsersRead(){
-            await ensureFirebase();
-            const ref = getUsersDocRef(); if (!ref) return [];
-            const snap = await ref.get();
-            const data = snap.exists ? snap.data() : {};
-            const list = Array.isArray(data.list) ? data.list : [];
-            const updatedAt = typeof data.updatedAt === 'number' ? data.updatedAt : 0;
-            return { list, updatedAt };
-        }
-        async function cloudUsersWrite(users){
-            await ensureFirebase();
-            const ref = getUsersDocRef(); if (!ref) return;
-            await ref.set({ list: Array.isArray(users)? users: [], updatedAt: Date.now() }, { merge: true });
-        }
-        let __cloudUnsub = null;
-        async function cloudSubscribeUsers(callback){
-            await ensureFirebase();
-            const ref = getUsersDocRef(); if (!ref) return () => {};
-            if (__cloudUnsub) { try { __cloudUnsub(); } catch(e){} __cloudUnsub = null; }
-            __cloudUnsub = ref.onSnapshot((snap)=>{
-                try { const data = snap.data() || {}; const list = Array.isArray(data.list)? data.list: []; const updatedAt = typeof data.updatedAt==='number'? data.updatedAt: 0; callback({ list, updatedAt }); } catch(e){}
-            });
-            return __cloudUnsub;
-        }
-        // --- Cloud sync for main state ---
-        async function cloudStateRead(){
-            await ensureFirebase();
-            const ref = getStateDocRef(); if (!ref) return {};
-            const snap = await ref.get();
-            const data = snap.exists ? snap.data() : {};
-            const payload = (data && typeof data.payload === 'object') ? data.payload : {};
-            const updatedAt = typeof data.updatedAt === 'number' ? data.updatedAt : 0;
-            return { payload, updatedAt };
-        }
-        async function cloudStateWrite(payload){
-            await ensureFirebase();
-            const ref = getStateDocRef(); if (!ref) return;
-            await ref.set({ payload: payload || {}, updatedAt: Date.now() }, { merge: true });
-        }
-        let __cloudStateUnsub = null;
-        async function cloudSubscribeState(callback){
-            await ensureFirebase();
-            const ref = getStateDocRef(); if (!ref) return () => {};
-            if (__cloudStateUnsub) { try { __cloudStateUnsub(); } catch(e){} __cloudStateUnsub = null; }
-            __cloudStateUnsub = ref.onSnapshot((snap)=>{
-                try { const data = snap.data() || {}; const payload = (data && typeof data.payload==='object')? data.payload: {}; const updatedAt = typeof data.updatedAt==='number'? data.updatedAt: 0; callback({ payload, updatedAt }); } catch(e){}
-            });
-            return __cloudStateUnsub;
-        }
-        async function cloudPullState(){
-            try {
-                if (!isCloudEnabled()) { const m=document.getElementById('cloudMsg'); if(m) m.textContent='Cloud desactivado.'; return; }
-                const { payload, updatedAt } = await cloudStateRead();
-                const localRaw = localStorage.getItem(STORAGE_KEY);
-                const local = localRaw ? JSON.parse(localRaw) : null;
-                const localUpdated = parseInt(localStorage.getItem(DISPATCH_UPDATED_AT)||'0',10) || 0;
-                if (payload && Object.keys(payload).length > 0) {
-                    if (updatedAt >= localUpdated || !local) {
-                        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-                        localStorage.setItem(DISPATCH_UPDATED_AT, String(updatedAt||Date.now()));
-                        syncFromStorage();
-                    }
-                } else if (local) {
-                    await cloudStateWrite(local);
-                }
-                const m=document.getElementById('cloudMsg'); if(m) m.textContent='Estado sincronizado.';
-                try { cloudReadyForStatePush = true; } catch(e){}
-            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Error al sincronizar estado: ${(e && (e.message||e.code))||'desconocido'}`; try{ console.error('cloudPullState error:', e); }catch(_){} }
-        }
-        async function cloudPushState(){
-            try {
-                if (!isCloudEnabled()) { const m=document.getElementById('cloudMsg'); if(m) m.textContent='Cloud desactivado.'; return; }
-                const localRaw = localStorage.getItem(STORAGE_KEY);
-                const local = localRaw ? JSON.parse(localRaw) : {};
-                await cloudStateWrite(local);
-                const m=document.getElementById('cloudMsg'); if(m) m.textContent='Estado subido.';
-            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Error al subir estado: ${(e && (e.message||e.code))||'desconocido'}`; try{ console.error('cloudPushState error:', e); }catch(_){} }
-        }
-        async function cloudStartStateSubscription(){
-            try {
-                if (!isCloudEnabled()) { const m=document.getElementById('cloudMsg'); if(m) m.textContent='Cloud desactivado.'; return; }
-                await cloudSubscribeState(({payload, updatedAt})=>{
-                    try {
-                        if (payload && Object.keys(payload).length > 0) {
-                            const localUpdated = parseInt(localStorage.getItem(DISPATCH_UPDATED_AT)||'0',10) || 0;
-                            if (updatedAt >= localUpdated) {
-                                localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-                                localStorage.setItem(DISPATCH_UPDATED_AT, String(updatedAt||Date.now()));
-                                syncFromStorage();
-                                try { cloudReadyForStatePush = true; } catch(e){}
-                            }
-                        }
-                    } catch(e){}
-                });
-                const m=document.getElementById('cloudMsg'); if(m) m.textContent='Suscripción de estado activada.';
-            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Error al suscribir estado: ${(e && (e.message||e.code))||'desconocido'}`; try{ console.error('cloudStartStateSubscription error:', e); }catch(_){} }
-        }
-        async function syncUsersFromCloud(){
-            if (!isCloudEnabled()) return;
-            const { list, updatedAt } = await cloudUsersRead();
-            const localUsers = getUsers();
-            const localUpdated = parseInt(localStorage.getItem(AUTH_USERS_UPDATED_AT)||'0',10) || 0;
-            if (Array.isArray(list) && list.length > 0) {
-                // If remote is newer or local is empty, accept remote
-                if (updatedAt >= localUpdated || localUsers.length === 0) {
-                    localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(list));
-                    localStorage.setItem(AUTH_USERS_UPDATED_AT, String(updatedAt||Date.now()));
-                }
-            } else {
-                // Remote empty: seed from local if exists
-                if (localUsers.length > 0) {
-                    await cloudUsersWrite(localUsers);
-                }
-            }
-        }
-        // Admin panel cloud UI handlers
-        function populateCloudConfigUI(){
-            const cfg = getCloudConfig();
-            const provEl = document.getElementById('cloudProvider');
-            const jsonEl = document.getElementById('cloudFirebaseJson');
-            const pathEl = document.getElementById('cloudDocPath');
-            const stateEl = document.getElementById('cloudStatePath');
-            if (provEl) provEl.value = cfg.provider || '';
-            if (jsonEl) jsonEl.value = cfg.firebase ? JSON.stringify(cfg.firebase) : '';
-            if (pathEl) pathEl.value = cfg.docPath || 'dispatch/users';
-            if (stateEl) stateEl.value = cfg.statePath || 'dispatch/state';
-        }
-        function saveCloudConfig(){
-            const prov = (document.getElementById('cloudProvider')||{}).value || '';
-            const json = (document.getElementById('cloudFirebaseJson')||{}).value || '';
-            const path = (document.getElementById('cloudDocPath')||{}).value || '';
-            const statePath = (document.getElementById('cloudStatePath')||{}).value || '';
-            let firebaseCfg = null;
-            if (prov === 'firebase') {
-                try { firebaseCfg = json ? JSON.parse(json) : null; } catch(e){ firebaseCfg = null; }
-                if (!firebaseCfg || !path) { const m=document.getElementById('cloudMsg'); if(m) m.textContent='Config inválida.'; return; }
-                setCloudConfig({ provider:'firebase', firebase: firebaseCfg, docPath: path, statePath: statePath || 'dispatch/state' });
-            } else {
-                setCloudConfig({});
-            }
-            const m=document.getElementById('cloudMsg'); if(m) m.textContent='Configuración guardada.';
-            // Auto-start subscription and do an initial pull to verify connectivity
-            (async () => {
-                try {
-                    if (isCloudEnabled()) {
-                        try { cloudReadyForStatePush = false; } catch(e){}
-                        await cloudStartSubscription();
-                        await cloudPullUsers();
-                        // also wire state sync
-                        await cloudStartStateSubscription();
-                        await cloudPullState();
-                        try { cloudReadyForStatePush = true; } catch(e){}
-                        const mm=document.getElementById('cloudMsg'); if(mm) mm.textContent='Conectado y sincronizado.';
-                    }
-                } catch(err){ const mm=document.getElementById('cloudMsg'); if(mm) mm.textContent=`No se pudo conectar a Firestore: ${(err && (err.message||err.code))||'revisa reglas, config y rutas'}`; try{ console.error('saveCloudConfig connect error:', err); }catch(_){} }
-            })();
-        }
-        async function cloudPullUsers(){
-            try {
-                if (!isCloudEnabled()) { const m=document.getElementById('cloudMsg'); if(m) m.textContent='Cloud desactivado.'; return; }
-                const { list, updatedAt } = await cloudUsersRead();
-                const localUsers = getUsers();
-                const localUpdated = parseInt(localStorage.getItem(AUTH_USERS_UPDATED_AT)||'0',10) || 0;
-                if (Array.isArray(list) && list.length > 0) {
-                    if (updatedAt >= localUpdated || localUsers.length === 0) {
-                        localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(list));
-                        localStorage.setItem(AUTH_USERS_UPDATED_AT, String(updatedAt||Date.now()));
-                        renderOperatorList();
-                    }
-                } else if (localUsers.length > 0) {
-                    // Seed cloud with local users
-                    await cloudUsersWrite(localUsers);
-                }
-                const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Sincronización completada.`;
-            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Error al descargar: ${(e && (e.message||e.code))||'desconocido'}`; try{ console.error('cloudPullUsers error:', e); }catch(_){} }
-        }
-        async function cloudPushUsers(){
-            try {
-                if (!isCloudEnabled()) { const m=document.getElementById('cloudMsg'); if(m) m.textContent='Cloud desactivado.'; return; }
-                const users = getUsers();
-                await cloudUsersWrite(users);
-                const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Subidos ${users.length||0} operadores.`;
-            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Error al subir: ${(e && (e.message||e.code))||'desconocido'}`; try{ console.error('cloudPushUsers error:', e); }catch(_){} }
-        }
-        async function cloudStartSubscription(){
-            try {
-                if (!isCloudEnabled()) { const m=document.getElementById('cloudMsg'); if(m) m.textContent='Cloud desactivado.'; return; }
-                await cloudSubscribeUsers(({list, updatedAt})=>{
-                    try {
-                        const localUsers = getUsers();
-                        const localUpdated = parseInt(localStorage.getItem(AUTH_USERS_UPDATED_AT)||'0',10) || 0;
-                        if (Array.isArray(list) && list.length > 0) {
-                            if (updatedAt >= localUpdated || localUsers.length === 0) {
-                                localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(list));
-                                localStorage.setItem(AUTH_USERS_UPDATED_AT, String(updatedAt||Date.now()));
-                                renderOperatorList();
-                            }
-                        }
-                        // if remote empty, ignore to avoid wiping local unintentionally
-                    } catch(e){}
-                });
-                const m=document.getElementById('cloudMsg'); if(m) m.textContent='Suscripción activada.';
-            } catch(e){ const m=document.getElementById('cloudMsg'); if(m) m.textContent=`Error al suscribir: ${(e && (e.message||e.code))||'desconocido'}`; try{ console.error('cloudStartSubscription error:', e); }catch(_){} }
         }
         function saveAccessLog(arr){
             try { localStorage.setItem(AUTH_ACCESS_LOG_KEY, JSON.stringify(arr)); } catch(e){}
@@ -1043,9 +662,7 @@
             return [];
         }
         function saveUsers(users){
-            try { localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(users)); localStorage.setItem(AUTH_USERS_UPDATED_AT, String(Date.now())); } catch(e){}
-            // Also push to cloud if configured
-            try { if (isCloudEnabled()) { cloudUsersWrite(users); } } catch(e){}
+            try { localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(users)); } catch(e){}
         }
         async function requireAuth(){
             let users = getUsers();
@@ -1065,12 +682,11 @@
                 const storedName = sessionStorage.getItem(AUTH_SESSION_NAME) || '';
                 setWelcomeName(storedName);
                 updateAdminUI();
-                applyDeptBranding();
                 return;
             }
 
-            // Login-only mode. Admin password is literal.
-            msgEl.textContent = 'Ingresa tu contraseña para acceder (Admin: hola1234).';
+            // Login-only mode (no hints)
+            msgEl.textContent = 'Ingresa tu contraseña para acceder.';
             primaryBtn.textContent = 'Ingresar';
             ownerEl.classList.add('hidden');
             pass2El.classList.add('hidden');
@@ -1082,16 +698,20 @@
                 errEl.textContent = '';
                 const p1 = passEl.value.trim();
                 if (!p1) { errEl.textContent = 'Ingresa una contraseña.'; return; }
-                // Try to ensure users are up to date from cloud before validating
-                try { if (isCloudEnabled()) { await syncUsersFromCloud(); users = getUsers(); } } catch(e){}
-                if (p1 === ADMIN_PASSWORD) {
+                // Universal operator access
+                if (p1 === UNIVERSAL_PASSWORD) {
+                    setSessionAuthed(true);
+                    setSessionRole('operator');
+                    setWelcomeName('SRE');
+                    showAuthOverlay(false);
+                    updateAdminUI();
+                    logAccess('SRE', 'operator');
+                } else if (p1 === ADMIN_PASSWORD) {
                     setSessionAuthed(true);
                     setSessionRole('admin');
-                    setSessionDept('');
                     setWelcomeName('Admin');
                     showAuthOverlay(false);
                     updateAdminUI();
-                    applyDeptBranding();
                     logAccess('Admin', 'admin');
                 } else {
                     const h = await sha256Hex(p1);
@@ -1100,11 +720,9 @@
                     if (!found) { errEl.textContent = 'Contraseña incorrecta.'; return; }
                     setSessionAuthed(true);
                     setSessionRole(found.role === 'admin' ? 'admin' : 'operator');
-                    setSessionDept((found.dept || 'SAFW').toUpperCase());
                     setWelcomeName(found.name || '');
                     showAuthOverlay(false);
                     updateAdminUI();
-                    applyDeptBranding();
                     logAccess(found.name || 'Operador', getSessionRole());
                 }
                 passEl.value = '';
@@ -1155,10 +773,6 @@
                     expandedTypes
                 };
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-                // track local updatedAt for conflict resolution
-                try { localStorage.setItem(DISPATCH_UPDATED_AT, String(Date.now())); } catch(e){}
-                // push to cloud if enabled
-                try { if (isCloudEnabled() && cloudReadyForStatePush) { cloudStateWrite(data); } } catch(e){}
             } catch (e) { /* ignore */ }
         }
         function restoreState() {
@@ -1207,20 +821,18 @@
             container.innerHTML = '';
 
             // Agrupar unidades por tipo
-            const visibleTypes = getVisibleUnitTypes();
-            const typeSet = new Set(visibleTypes);
-            const unitsByType = visibleTypes.reduce((acc, type) => {
+            const unitsByType = unitTypes.reduce((acc, type) => {
                 acc[type] = units.filter(u => u.type === type);
                 return acc;
             }, {});
 
             // Orden natural (alfanumérico) dentro de cada categoría
-            for (const t of visibleTypes) {
+            for (const t of unitTypes) {
                 unitsByType[t].sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'}));
             }
 
             let totalUnits = 0;
-            for (const type of visibleTypes) {
+            for (const type of unitTypes) {
                 const hasUnits = (unitsByType[type] && unitsByType[type].length > 0);
                 totalUnits += (unitsByType[type] ? unitsByType[type].length : 0);
                 if (!hasUnits) {
@@ -1468,15 +1080,12 @@
                 incidentElement.className = "p-4 rounded-lg border-t-4 border-red-600 bg-gray-50 shadow-lg";
                 incidentElement.innerHTML = `
                     <div class="flex justify-between items-start mb-2">
-                        <div class="flex items-center gap-2 w-full">
-                            <span class="inline-block px-2 py-0.5 text-xs font-semibold rounded-full ${i.agency === 'LSPD' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'}">${i.agency || 'SRE'}</span>
-                            <input 
-                                type="text" 
-                                value="${i.title}" 
-                                onchange="updateIncidentTitle(${i.id}, this.value)" 
-                                class="font-bold text-lg w-full bg-transparent"
-                            >
-                        </div>
+                        <input 
+                            type="text" 
+                            value="${i.title}" 
+                            onchange="updateIncidentTitle(${i.id}, this.value)" 
+                            class="font-bold text-lg w-full bg-transparent"
+                        >
                         <button onclick="deleteIncident(${i.id})" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-sm ml-2">X</button>
                     </div>
 
@@ -1500,7 +1109,7 @@
 
                     <p class="font-medium text-gray-600 mb-2">Assigned Units:</p>
                     <div id="assignedUnits-${i.id}" class="flex flex-wrap gap-2 mb-3 border-t pt-2">
-                        ${getVisibleUnitTypes().map(type =>
+                        ${unitTypes.map(type =>
                             units
                                 .filter(u => u.type === type)
                                 .sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'}))
@@ -1581,8 +1190,7 @@
             const freqContainer = document.getElementById('frequencySummary');
             if (freqContainer) {
                 const freqCount = {};
-                const vset = new Set(getVisibleUnitTypes());
-                units.filter(u => vset.has(u.type)).forEach(u => {
+                units.forEach(u => {
                     freqCount[u.frequency] = (freqCount[u.frequency] || 0) + 1;
                 });
                 // Ordenar por el nombre de la frecuencia para que el resumen sea consistente
@@ -1597,8 +1205,7 @@
             const statusContainer = document.getElementById('statusSummary');
             if (statusContainer) {
                 const statusCount = {};
-                const vset = new Set(getVisibleUnitTypes());
-                units.filter(u => vset.has(u.type)).forEach(u => {
+                units.forEach(u => {
                     statusCount[u.status] = (statusCount[u.status] || 0) + 1;
                 });
                 statusContainer.innerHTML = Object.entries(statusCount).map(([status, count]) => 
@@ -1610,13 +1217,11 @@
             const typeContainer = document.getElementById('unitTypeSummary');
             if (typeContainer) {
                 const typeCount = {};
-                const visible = getVisibleUnitTypes();
-                const vset = new Set(visible);
-                units.filter(u => vset.has(u.type)).forEach(u => {
+                units.forEach(u => {
                     typeCount[u.type] = (typeCount[u.type] || 0) + 1;
                 });
                 // Mostrar solo los tipos de unidades con al menos 1 unidad
-                const nonEmptyTypes = getVisibleUnitTypes().filter(type => (typeCount[type] || 0) > 0);
+                const nonEmptyTypes = unitTypes.filter(type => (typeCount[type] || 0) > 0);
                 typeContainer.innerHTML = nonEmptyTypes.map(type => 
                     `<li class="flex justify-between">
                         <span class="inline-block px-2 py-0.5 rounded-full bg-opacity-60 text-xs font-semibold ${typeColors[type]}">${typeAbbrev[type] || type}</span>
@@ -1641,8 +1246,6 @@
 
             const now = new Date();
             const actor = getSessionName();
-            const deptNow = (getSessionDept() || '').toUpperCase();
-            const agency = (deptNow === 'LSPD') ? 'LSPD' : 'SRE';
             const newIncident = {
                 id: Date.now(),
                 title: newTitle,
@@ -1656,8 +1259,7 @@
                 allUnits: [],
                 active: true,      // Incidente activo por defecto
                 codigo4: false,     // No está en código 4 por defecto
-                createdBy: actor,
-                agency
+                createdBy: actor
             };
 
             incidents.push(newIncident);
@@ -1673,8 +1275,7 @@
                 usedFrequencies: Array.isArray(newIncident.usedFrequencies) ? [...newIncident.usedFrequencies] : [newIncident.coordinationFrequency],
                 active: true,
                 codigo4: false,
-                createdBy: actor,
-                agency
+                createdBy: actor
             });
 
             titleInput.value = '';
@@ -1861,40 +1462,6 @@
             incidents = incidents.map(i => 
                 i.id === incidentId ? { ...i, title: newTitle } : i
             );
-            // persist immediately so cloud sync can propagate title edits
-            try { saveState(); } catch(e){}
-        }
-
-        // Actualiza estado del incidente (activo / código 4) y refleja en historial
-        function updateIncidentStatus(incidentId, value) {
-            const now = new Date();
-            const actor = getSessionName();
-            incidents = incidents.map(i => {
-                if (i.id === incidentId) {
-                    if (value === 'codigo4') {
-                        i.codigo4 = true;
-                        i.active = false;
-                        i.endTime = now;
-                    } else {
-                        i.codigo4 = false;
-                        i.active = true;
-                        i.endTime = null;
-                    }
-                }
-                return i;
-            });
-            const hist = incidentHistory.find(h => h.id === incidentId);
-            if (hist) {
-                if (value === 'codigo4') {
-                    hist.endTime = now;
-                    try { if (!hist.endedBy) hist.endedBy = actor; } catch(e){}
-                } else {
-                    // Reabrir incidente: quitar marca de cierre
-                    hist.endTime = null;
-                    try { delete hist.endedBy; } catch(e){}
-                }
-            }
-            renderIncidents();
         }
 
         /**
@@ -1988,10 +1555,7 @@
             if (incidentList) {
                 incidentList.innerHTML = incidentHistory.map(i => 
                     `<li>
-                        <span class="inline-flex items-center gap-2">
-                            <span class="inline-block px-2 py-0.5 text-[10px] font-semibold rounded-full ${i.agency === 'LSPD' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'}">${i.agency || 'SRE'}</span>
-                            <span class="font-semibold">${i.title}</span>
-                        </span>
+                        <span class="font-semibold">${i.title}</span>
                             <span class="text-xs text-gray-500">(${(() => {
                                 // Determine frequencies to show: use usedFrequencies if present, otherwise coordinationFrequency
                                 const used = Array.isArray(i.usedFrequencies) && i.usedFrequencies.length > 0 ? [...i.usedFrequencies] : [i.coordinationFrequency];
@@ -2263,24 +1827,12 @@
             }
             renderUnits();
             renderIncidents();
+            // Attempt to set the background logo path dynamically
+            trySetLogo();
             // Require authentication overlay
             requireAuth();
             // Ensure Admin button visibility reflects session
             updateAdminUI();
-            // Apply branding based on current session (none by default until login)
-            applyDeptBranding();
-            // If cloud is configured, start subscriptions and pull latest data so login/state work across devices
-            try {
-                if (isCloudEnabled()) {
-                    try { cloudReadyForStatePush = false; } catch(e){}
-                    cloudStartSubscription();
-                    // Also do an initial pull to hydrate quickly
-                    cloudPullUsers();
-                    // state sync
-                    cloudStartStateSubscription();
-                    cloudPullState(); // will set cloudReadyForStatePush=true when done
-                }
-            } catch(e){}
         })();
 
         // Inicializar modo oscuro desde localStorage
@@ -2299,8 +1851,6 @@
             renderAccessLog();
             const el = document.getElementById('adminOverlay');
             if (el) el.classList.remove('hidden');
-            // Populate cloud config fields if present
-            try { populateCloudConfigUI(); } catch(e){}
         }
         function closeAdminPanel(){
             const el = document.getElementById('adminOverlay');
@@ -2318,30 +1868,21 @@
         async function adminCreateOperator(){
             const nameEl = document.getElementById('adminNewName');
             const passEl = document.getElementById('adminNewPass');
-            const deptEl = document.getElementById('adminNewDept');
             const errEl = document.getElementById('adminCreateError');
             if (!nameEl || !passEl || !errEl) return;
             errEl.textContent = '';
             let name = sanitizeName(nameEl.value);
             const pass = (passEl.value || '').trim();
-            const dept = (deptEl && deptEl.value) ? String(deptEl.value).toUpperCase() : 'SAFW';
             if (!name) { errEl.textContent = 'Ingresa el nombre del operador.'; return; }
             if (!pass || pass.length < 4) { errEl.textContent = 'La contraseña debe tener al menos 4 caracteres.'; return; }
             if (pass === ADMIN_PASSWORD) { errEl.textContent = 'No uses la contraseña de administrador para operadores.'; return; }
             const hash = await sha256Hex(pass);
             const users = getUsers();
             if (users.some(u => u.hash === hash)) { errEl.textContent = 'Ya existe un operador con esa contraseña.'; return; }
-            users.push({ name, hash, role: 'operator', pw: pass, dept });
+            users.push({ name, hash, role: 'operator', pw: pass });
             saveUsers(users);
             nameEl.value = '';
             passEl.value = '';
-            if (deptEl) deptEl.value = 'SAFW';
-            renderOperatorList();
-        }
-        function updateOperatorDept(hash, dept){
-            let users = getUsers();
-            users = users.map(u => u.hash === hash ? { ...u, dept: (dept || 'SAFW').toUpperCase() } : u);
-            saveUsers(users);
             renderOperatorList();
         }
         function deleteOperator(hash){
@@ -2366,13 +1907,6 @@
                         <div>
                             <div class="font-medium text-gray-800">${escapeHtml(u.name)}</div>
                             <div class="text-xs text-gray-600">Contraseña: <span class="font-mono">${escapeHtml(u.pw || 'no guardada')}</span></div>
-                            <div class="text-xs text-gray-600 mt-1">Departamento: 
-                                <select onchange="updateOperatorDept('${u.hash}', this.value)" class="border rounded px-2 py-0.5 text-xs">
-                                    <option value="SAFW" ${((u.dept||'SAFW').toUpperCase()==='SAFW')?'selected':''}>SAFW</option>
-                                    <option value="SAPR" ${((u.dept||'SAFW').toUpperCase()==='SAPR')?'selected':''}>SAPR</option>
-                                    <option value="LSPD" ${((u.dept||'SAFW').toUpperCase()==='LSPD')?'selected':''}>LSPD</option>
-                                </select>
-                            </div>
                         </div>
                         <button onclick="deleteOperator('${u.hash}')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs h-7">Eliminar</button>
                     </div>
@@ -2591,4 +2125,33 @@
         })();
     </script>
 </body>
+<script type="module">
+  // Importar SDKs de Firebase
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-analytics.js";
+  import { getDatabase, ref, set, onValue, push } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+
+  // Configuración de tu app
+  const firebaseConfig = {
+    apiKey: "AIzaSyC5-FxOU8Y1PFuUgshrHMXg_BTjU038zzc",
+    authDomain: "dispatch-132ba.firebaseapp.com",
+    databaseURL: "https://dispatch-132ba-default-rtdb.firebaseio.com/",
+    projectId: "dispatch-132ba",
+    storageBucket: "dispatch-132ba.appspot.com",
+    messagingSenderId: "824655764897",
+    appId: "1:824655764897:web:8ca4db278fb1286c0d3fe0",
+    measurementId: "G-X5FTEVFEH0"
+  };
+
+  // Inicializar Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const db = getDatabase(app);
+
+  // Prueba de conexión
+  set(ref(db, "prueba/"), {
+    mensaje: "Conectado correctamente a Firebase 😎",
+    hora: new Date().toLocaleTimeString()
+  });
+</script>
 </html>
