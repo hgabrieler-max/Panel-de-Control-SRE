@@ -250,6 +250,7 @@
     <div class="flex items-center justify-between mb-4 nature-glass p-4 rounded-lg">
         <div class="flex items-center gap-4">
             <h1 class="text-3xl font-extrabold text-green-900">Panel de Control</h1>
+            <p id="mensaje" class="text-sm text-gray-700">Cargando...</p>
         </div>
         <div class="flex items-center gap-3">
             <span id="welcomeOwner" class="text-sm text-gray-700 hidden"></span>
@@ -2128,7 +2129,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-analytics.js";
-  import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyC5-FxOU8Y1PfUUsghrHMXg_BTjUO38zzc",
@@ -2145,6 +2146,24 @@
 
   // 🔽 Conexión a la base de datos
   const db = getDatabase(app);
+
+    // 🔽 Escuchar cambios en tiempo real en "prueba/"
+    const referencia = ref(db, "prueba/");
+    onValue(referencia, (snapshot) => {
+        const data = snapshot.val();
+        console.log("Datos actualizados:", data);
+        const elemento = document.getElementById("mensaje");
+        if (elemento) {
+            if (data && typeof data === 'object' && 'mensaje' in data && data.mensaje) {
+                elemento.textContent = String(data.mensaje);
+            } else if (data && typeof data === 'string') {
+                // Si el nodo es directamente un string
+                elemento.textContent = data;
+            } else {
+                elemento.textContent = 'Sin datos';
+            }
+        }
+    });
 
   // 🔽 Escribir un ejemplo de dato (opcional)
   set(ref(db, "prueba/"), {
