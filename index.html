@@ -248,9 +248,15 @@
     </div>
 
     <div class="flex items-center justify-between mb-4 nature-glass p-4 rounded-lg">
-        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-4 flex-wrap">
             <h1 class="text-3xl font-extrabold text-green-900">Panel de Control</h1>
             <p id="mensaje" class="text-sm text-gray-700">Cargando...</p>
+                <span id="roomBadge" class="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-800" title="Room actual y URL del archivo">Room: (init)</span>
+                <div class="flex items-center gap-2">
+                    <input id="roomInput" class="border px-2 py-1 rounded text-xs w-32" placeholder="Room" />
+                    <button id="roomChangeBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded text-xs">Cambiar</button>
+                    <button id="copyLinkBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded text-xs">Copiar link</button>
+                </div>
         </div>
         <div class="flex items-center gap-3">
             <span id="welcomeOwner" class="text-sm text-gray-700 hidden"></span>
@@ -2135,7 +2141,8 @@
 
   const firebaseConfig = {
     apiKey: "AIzaSyC5-FxOU8Y1PfUUsghrHMXg_BTjUO38zzc",
-    authDomain: "https://dispatch-132ba-default-rtdb.firebaseio.com/",
+        authDomain: "dispatch-132ba.firebaseapp.com",
+        databaseURL: "https://dispatch-132ba-default-rtdb.firebaseio.com",
     projectId: "dispatch-132ba",
     storageBucket: "dispatch-132ba.appspot.com",
     messagingSenderId: "824655764897",
@@ -2149,9 +2156,14 @@
   // 🔽 Conexión a la base de datos
   const db = getDatabase(app);
 
-    // ========= Realtime sync for the app state (units/incidents/history) =========
-    // Room path: all clients connected to this room share the same state
-    const ROOM_PATH = 'rooms/default';
+        // ========= Realtime sync for the app state (units/incidents/history) =========
+        // Room path: all clients connected to this room share the same state
+        // Room name can come from URL (?room=nombre), or localStorage, defaulting to 'default'
+        const _rawRoom = (new URLSearchParams(location.search).get('room') || localStorage.getItem('dispatchRoom') || 'default');
+        const roomName = String(_rawRoom).trim().replace(/[^\w\-]/g, '').slice(0, 40) || 'default';
+        try { localStorage.setItem('dispatchRoom', roomName); } catch(e){}
+        window.dispatchRoomName = roomName;
+        const ROOM_PATH = `rooms/${roomName}`;
     const STATE_REF = ref(db, `${ROOM_PATH}/state`);
 
     // Identify this client to avoid echo loops
@@ -2243,7 +2255,46 @@
 
   // 🔽 Escribir un ejemplo de dato (opcional)
   set(ref(db, "prueba/"), {
-    mensaje: "Hola desde tu panel"
+    mensaje: "Bienvenido a tu panel"
   });
+
+    // UI: mostrar room y la URL del archivo para inspección rápida
+    try {
+        const badge = document.getElementById('roomBadge');
+        if (badge) {
+            badge.textContent = `Room: ${roomName}`;
+            badge.title = `Room: ${roomName}\nURL: ${window.location.href}`;
+        }
+            const input = document.getElementById('roomInput');
+            const changeBtn = document.getElementById('roomChangeBtn');
+            const copyBtn = document.getElementById('copyLinkBtn');
+            if (input) input.value = roomName;
+            const applyRoom = () => {
+                const next = String((input && input.value) || '')
+                    .trim()
+                    .replace(/[^\w\-]/g, '')
+                    .slice(0, 40) || 'default';
+                try { localStorage.setItem('dispatchRoom', next); } catch(e){}
+                const url = new URL(window.location.href);
+                url.searchParams.set('room', next);
+                // Also add a simple cache-buster to mitigate CDN/browser cache when sharing
+                url.searchParams.set('v', String(Date.now()).slice(-6));
+                window.location.href = url.toString();
+            };
+            if (changeBtn) changeBtn.addEventListener('click', applyRoom);
+            if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyRoom(); });
+            if (copyBtn) {
+                copyBtn.addEventListener('click', async () => {
+                    try {
+                        await navigator.clipboard.writeText(window.location.href);
+                        const old = copyBtn.textContent;
+                        copyBtn.textContent = 'Copiado';
+                        setTimeout(() => { copyBtn.textContent = old || 'Copiar link'; }, 1200);
+                    } catch (e) {
+                        // ignore
+                    }
+                });
+            }
+    } catch (e) { /* ignore */ }
 </script>
 </html>
